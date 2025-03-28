@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { addMessage, isHeaderUnique } from '../services/messageService';
+import { useDispatch, useSelector } from 'react-redux';
+import { addMessage as addMessageAction } from '../redux/slices/messagesSlice';
+import { RootState } from '../redux/store';
+import { calculateDistance } from '../services/messageService';
 
 interface MessageModalProps {
   onClose: () => void;
@@ -16,6 +19,16 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
   const [messageError, setMessageError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Get Redux dispatch and messages, but handle the case when Redux is not available
+  let dispatch: any = null;
+  let reduxMessages: any[] = [];
+  try {
+    dispatch = useDispatch();
+    reduxMessages = useSelector((state: RootState) => state.messages.messages) || [];
+  } catch (error) {
+    console.log('MessageModal - Redux not available yet:', error);
+  }
+
   // Validate header
   const validateHeader = (value: string): boolean => {
     if (!value.trim()) {
@@ -29,7 +42,15 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
     }
     
     // Check if header is unique in 3km radius
-    if (!isHeaderUnique(value, coordinates[0], coordinates[1])) {
+    const isHeaderUnique = !reduxMessages.some(msg => {
+      const distance = calculateDistance(
+        coordinates[0], coordinates[1],
+        msg.location[0], msg.location[1]
+      );
+      return distance <= 3 && msg.header && msg.header.toLowerCase() === value.toLowerCase();
+    });
+    
+    if (!isHeaderUnique) {
       setHeaderError('This header is already used by another message in this area');
       return false;
     }
@@ -69,11 +90,20 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
     setIsSubmitting(true);
     
     try {
-      // Add message to database
-      addMessage(header, message, coordinates[0], coordinates[1]);
-      
-      // Call onSubmit with success
-      onSubmit(true);
+      // Add message to Redux store if available
+      if (dispatch) {
+        try {
+          dispatch(addMessageAction(message, [coordinates[0], coordinates[1]], 1, header));
+          console.log('MessageModal - Message added to Redux store');
+          // Call onSubmit with success
+          onSubmit(true);
+        } catch (error) {
+          console.error('Error adding message to Redux:', error);
+          onSubmit(false, 'An error occurred while dropping your message');
+        }
+      } else {
+        onSubmit(false, 'Redux store is not available');
+      }
     } catch (error) {
       console.error('Error adding message:', error);
       onSubmit(false, 'An error occurred while dropping your message');

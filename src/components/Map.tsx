@@ -79,9 +79,7 @@ export default function Map({
   // Initialize sample messages once map is ready
   useEffect(() => {
     if (mapReady && coordinates) {
-      console.log('Initializing sample messages at coordinates:', coordinates);
-      // Always create new sample messages at the current location
-      addSampleMessages(coordinates[0], coordinates[1]);
+      console.log('Map is ready with coordinates:', coordinates);
       setMessagesInitialized(true);
     }
   }, [mapReady, coordinates]);

@@ -7,7 +7,7 @@ import Fob from './fob';
 import Footer from './footer';
 import MessageModal from '../components/MessageModal';
 import MessageDetail from '../components/MessageDetail';
-import { Message, addSampleMessages } from '../services/messageService';
+import { Message } from '../services/messageService';
 
 // Import Map component dynamically to avoid SSR issues with Leaflet
 const Map = dynamic(() => import('../components/Map'), {
@@ -33,11 +33,10 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [mapKey, setMapKey] = useState(0); // Force re-render of map when needed
 
-  // Initialize sample messages when coordinates are available
+  // Initialize map when coordinates are available
   useEffect(() => {
     if (coordinates && coordinates[0] && coordinates[1]) {
-      console.log('Page: Initializing sample messages with coordinates:', coordinates);
-      addSampleMessages(coordinates[0], coordinates[1]);
+      console.log('Page: Coordinates available:', coordinates);
       
       // Force map re-render to ensure messages are displayed
       setMapKey(prev => prev + 1);
