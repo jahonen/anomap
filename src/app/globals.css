@@ -3,6 +3,7 @@
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
   --orange-500: #f97316;
+  --fob-animation-duration: 0.3s;
 }
 
 body {
@@ -71,7 +72,9 @@ body {
   cursor: pointer;
   padding: 0;
   outline: none;
-  transition: background-color 0.2s ease-in-out;
+  transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out;
+  z-index: 2;
+  position: relative;
 }
 
 .fob-button:hover {
@@ -89,31 +92,49 @@ body {
 .fob-icon {
   width: 24px;
   height: 24px;
+  transition: transform var(--fob-animation-duration) ease-in-out;
+}
+
+.fob-icon-rotate {
+  transform: rotate(45deg);
 }
 
 .fob-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 16px;
+  position: relative;
 }
 
 .fob-option-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  background-color: white;
+  background-color: var(--orange-500);
+  color: white;
   border: none;
   border-radius: 20px;
   padding: 8px 16px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   cursor: pointer;
-  transition: transform 0.1s ease-in-out;
+  transition: all 0.2s ease-in-out;
   font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(20px) scale(0.8);
+  pointer-events: none;
+}
+
+.fob-option-button.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 .fob-option-button:hover {
   transform: translateX(-5px);
+  background-color: #ea580c; /* Darker orange on hover */
 }
 
 .fob-option-button:active {
@@ -123,7 +144,37 @@ body {
 .fob-option-icon {
   width: 18px;
   height: 18px;
-  color: var(--orange-500);
+  color: white;
+}
+
+/* Animation for FOB options */
+.fob-option-button:nth-child(1) {
+  transition-delay: calc(var(--fob-animation-duration) * 0.1);
+}
+
+.fob-option-button:nth-child(2) {
+  transition-delay: calc(var(--fob-animation-duration) * 0.2);
+}
+
+.fob-option-button:nth-child(3) {
+  transition-delay: calc(var(--fob-animation-duration) * 0.3);
+}
+
+.fob-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0);
+  transition: background-color var(--fob-animation-duration) ease-in-out;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.fob-backdrop.visible {
+  background-color: rgba(0, 0, 0, 0.1);
+  pointer-events: auto;
 }
 
 /* For mobile devices */
