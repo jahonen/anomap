@@ -1107,3 +1107,67 @@ body {
     width: 95%;
   }
 }
+
+/* Map search control styles */
+.leaflet-control-search {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  padding: 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  margin-bottom: 10px;
+  z-index: 1000;
+  width: 280px;
+}
+
+.map-search-input {
+  width: 220px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  outline: none;
+  margin-right: 5px;
+}
+
+.map-search-input:focus {
+  border-color: #3388ff;
+}
+
+.map-search-button {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-search-button:hover {
+  background-color: #e8e8e8;
+}
+
+.map-search-button:active {
+  background-color: #d8d8d8;
+}
+
+/* Make sure the search control is visible above other elements */
+.leaflet-top .leaflet-control {
+  margin-top: 10px;
+  clear: both;
+}
+
+.leaflet-top.leaflet-left .leaflet-control:first-child {
+  margin-top: 10px;
+}
+
+/* Add spacing between search and zoom controls */
+.leaflet-control-zoom {
+  margin-top: 15px !important;
+  clear: both;
+}

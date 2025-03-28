@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { OpenStreetMapProvider } from 'leaflet-geosearch';
+import 'leaflet-geosearch/dist/geosearch.css';
 import MessageLayer from './MessageLayer';
-import { Message, addSampleMessages } from '../services/messageService';
+import { Message } from '../services/messageService';
 
 // Fix Leaflet default icon issues
 function fixLeafletIcons() {
@@ -50,14 +52,133 @@ export default function Map({
         const map = L.map('map-container', {
           center: coordinates,
           zoom: zoom,
-          zoomControl: true,
+          zoomControl: false, // Disable default zoom control, we'll add it manually
           attributionControl: true,
         });
         
-        // Add tile layer
+        // Add tile layer (map style)
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
+        
+        // Create search control
+        const searchControl = L.Control.extend({
+          options: {
+            position: 'topleft'
+          },
+          
+          onAdd: function() {
+            // Create container
+            const container = L.DomUtil.create('div', 'leaflet-control leaflet-bar leaflet-control-search');
+            
+            // Create input
+            const input = L.DomUtil.create('input', 'map-search-input', container);
+            input.type = 'text';
+            input.placeholder = 'Search for a location';
+            
+            // Create button
+            const button = L.DomUtil.create('button', 'map-search-button', container);
+            button.innerHTML = '🔍';
+            
+            // Prevent map click events when interacting with the control
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+            
+            // Add search functionality
+            const provider = new OpenStreetMapProvider();
+            
+            const handleSearch = async () => {
+              const query = input.value;
+              if (!query) return;
+              
+              try {
+                const results = await provider.search({ query });
+                if (results && results.length > 0) {
+                  const { x, y } = results[0];
+                  const lat = y;
+                  const lng = x;
+                  
+                  // Update map view
+                  map.setView([lat, lng], 15);
+                  
+                  // Update marker if in edit mode
+                  if (isEditMode && onLocationChange) {
+                    onLocationChange([lat, lng]);
+                    
+                    if (markerRef.current) {
+                      markerRef.current.setLatLng([lat, lng]);
+                    } else {
+                      const marker = L.marker([lat, lng], { draggable: isEditMode }).addTo(map);
+                      markerRef.current = marker;
+                      
+                      marker.on('dragend', () => {
+                        const position = marker.getLatLng();
+                        onLocationChange([position.lat, position.lng]);
+                      });
+                    }
+                  }
+                }
+              } catch (error) {
+                console.error('Search error:', error);
+              }
+            };
+            
+            // Add event listeners
+            L.DomEvent.on(button, 'click', handleSearch);
+            L.DomEvent.on(input, 'keypress', (e) => {
+              if (e.keyCode === 13) { // Enter key
+                handleSearch();
+              }
+            });
+            
+            return container;
+          }
+        });
+        
+        // Add the search control to the map first
+        map.addControl(new searchControl());
+        
+        // Add zoom control after search control
+        L.control.zoom({
+          position: 'topleft'
+        }).addTo(map);
+        
+        // Add marker if in edit mode
+        if (isEditMode) {
+          const marker = L.marker(coordinates, { draggable: isEditMode }).addTo(map);
+          markerRef.current = marker;
+          
+          // Handle marker drag events
+          if (isEditMode && onLocationChange) {
+            marker.on('dragend', () => {
+              const position = marker.getLatLng();
+              onLocationChange([position.lat, position.lng]);
+            });
+          }
+        }
+        
+        // Handle map click events
+        map.on('click', (e) => {
+          if (isEditMode && onLocationChange) {
+            const { lat, lng } = e.latlng;
+            onLocationChange([lat, lng]);
+            
+            // Update marker position
+            if (markerRef.current) {
+              markerRef.current.setLatLng([lat, lng]);
+            } else {
+              // Create marker if it doesn't exist
+              const marker = L.marker([lat, lng], { draggable: isEditMode }).addTo(map);
+              markerRef.current = marker;
+              
+              // Handle marker drag events
+              marker.on('dragend', () => {
+                const position = marker.getLatLng();
+                onLocationChange([position.lat, position.lng]);
+              });
+            }
+          }
+        });
         
         // Store map reference
         mapRef.current = map;
@@ -68,7 +189,6 @@ export default function Map({
     // Cleanup function
     return () => {
       if (mapRef.current) {
-        console.log('Removing map instance');
         mapRef.current.remove();
         mapRef.current = null;
         markerRef.current = null;
@@ -91,79 +211,6 @@ export default function Map({
       mapRef.current.setView(coordinates, zoom);
     }
   }, [coordinates, zoom, mapReady]);
-
-  // Handle marker creation and updates
-  useEffect(() => {
-    if (!mapRef.current || !mapReady) return;
-    
-    const map = mapRef.current;
-    
-    // Create or update marker
-    if (!markerRef.current && coordinates) {
-      console.log('Creating new marker at:', coordinates);
-      
-      // Create marker with default icon (already fixed by fixLeafletIcons)
-      const marker = L.marker(coordinates, { 
-        draggable: isEditMode 
-      }).addTo(map);
-      
-      // Add drag events if in edit mode
-      if (isEditMode) {
-        marker.on('dragend', function(e) {
-          const position = e.target.getLatLng();
-          const newCoords: [number, number] = [position.lat, position.lng];
-          console.log('Marker dragged to:', newCoords);
-          
-          if (onLocationChange) {
-            onLocationChange(newCoords);
-          }
-        });
-      }
-      
-      markerRef.current = marker;
-    } 
-    // Update existing marker
-    else if (markerRef.current && coordinates) {
-      console.log('Updating marker position to:', coordinates);
-      markerRef.current.setLatLng(coordinates);
-      
-      // Update draggable state
-      if (markerRef.current.dragging) {
-        if (isEditMode && !markerRef.current.dragging.enabled()) {
-          markerRef.current.dragging.enable();
-        } else if (!isEditMode && markerRef.current.dragging.enabled()) {
-          markerRef.current.dragging.disable();
-        }
-      }
-    }
-    
-    // Handle map clicks in edit mode
-    const handleMapClick = (e: L.LeafletMouseEvent) => {
-      if (isEditMode) {
-        const newCoords: [number, number] = [e.latlng.lat, e.latlng.lng];
-        console.log('Map clicked at:', newCoords);
-        
-        if (onLocationChange) {
-          onLocationChange(newCoords);
-        }
-      }
-    };
-    
-    // Add or remove click handler based on edit mode
-    if (isEditMode) {
-      console.log('Adding map click handler for edit mode');
-      map.on('click', handleMapClick);
-    } else {
-      console.log('Removing map click handler for edit mode');
-      map.off('click', handleMapClick);
-    }
-    
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.off('click', handleMapClick);
-      }
-    };
-  }, [coordinates, isEditMode, onLocationChange, mapReady]);
 
   // Render MessageLayer when map is ready
   console.log('Map render - mapReady:', mapReady, 'coordinates:', coordinates, 'messagesInitialized:', messagesInitialized);
