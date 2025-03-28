@@ -37,6 +37,7 @@ export default function Map({
   const markerRef = useRef<L.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [messagesInitialized, setMessagesInitialized] = useState(false);
+  const [currentZoom, setCurrentZoom] = useState(zoom);
 
   // Initialize map
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function Map({
         // Initialize the map
         const map = L.map('map-container', {
           center: coordinates,
-          zoom: zoom,
+          zoom: currentZoom,
           zoomControl: false, // Disable default zoom control, we'll add it manually
           attributionControl: true,
         });
@@ -204,13 +205,20 @@ export default function Map({
     }
   }, [mapReady, coordinates]);
 
-  // Update map when center or zoom changes
+  // Update zoom when prop changes
+  useEffect(() => {
+    if (zoom !== undefined) {
+      setCurrentZoom(zoom);
+    }
+  }, [zoom]);
+
+  // Update map view when coordinates change
   useEffect(() => {
     if (mapRef.current && mapReady) {
       console.log('Updating map view to:', coordinates);
-      mapRef.current.setView(coordinates, zoom);
+      mapRef.current.setView(coordinates, currentZoom);
     }
-  }, [coordinates, zoom, mapReady]);
+  }, [coordinates, currentZoom, mapReady]);
 
   // Render MessageLayer when map is ready
   console.log('Map render - mapReady:', mapReady, 'coordinates:', coordinates, 'messagesInitialized:', messagesInitialized);

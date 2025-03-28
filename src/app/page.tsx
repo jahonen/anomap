@@ -33,6 +33,28 @@ export default function Home() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [mapKey, setMapKey] = useState(0); // Force re-render of map when needed
+  const [mapZoom, setMapZoom] = useState<number | undefined>(undefined);
+
+  // Check for URL parameters on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const lat = parseFloat(urlParams.get('lat') || '');
+      const lng = parseFloat(urlParams.get('lng') || '');
+      const zoom = parseInt(urlParams.get('zoom') || '', 10);
+      
+      // If valid coordinates are provided in URL, set them as manual location
+      if (!isNaN(lat) && !isNaN(lng)) {
+        console.log('Setting location from URL parameters:', lat, lng);
+        setManualLocation([lat, lng]);
+        
+        // Set zoom level if provided
+        if (!isNaN(zoom)) {
+          setMapZoom(zoom);
+        }
+      }
+    }
+  }, [setManualLocation]);
 
   // Initialize map when coordinates are available
   useEffect(() => {
@@ -127,6 +149,7 @@ export default function Home() {
           isEditMode={isEditMode}
           onLocationChange={setManualLocation}
           onMessageClick={handleMessageClick}
+          zoom={mapZoom}
         />
       )}
       

@@ -749,6 +749,46 @@ body {
   color: #666;
 }
 
+/* Social share buttons styles */
+.social-share-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.social-share-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  text-decoration: none;
+  color: white;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.social-share-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.bluesky-button {
+  background-color: #0085ff;
+}
+
+.reddit-button {
+  background-color: #FF4500;
+}
+
+.social-share-button svg {
+  width: 20px;
+  height: 20px;
+}
+
 .message-detail-content {
   padding: 16px;
   overflow-y: auto;
