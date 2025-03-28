@@ -27,7 +27,8 @@ const convertReduxMessage = (reduxMessage: any, center: [number, number]): Messa
     },
     timestamp: new Date(reduxMessage.timestamp).getTime(),
     expiresAt: new Date(reduxMessage.timestamp).getTime() + (24 * 60 * 60 * 1000), // 24 hours from timestamp
-    replyCount: reduxMessage.replies ? reduxMessage.replies.length : 0
+    replyCount: reduxMessage.replyCount || (reduxMessage.replies ? reduxMessage.replies.length : 0),
+    replies: reduxMessage.replies || []
   };
 };
 

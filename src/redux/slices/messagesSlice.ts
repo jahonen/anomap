@@ -1,7 +1,25 @@
 // src/redux/messagesSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Message } from '../../utils/types';
 import { v4 as uuidv4 } from 'uuid';
+
+// Define the Reply interface
+interface Reply {
+  id: string;
+  text: string;
+  timestamp: number;
+}
+
+// Define the Message interface for Redux
+interface Message {
+  id: string;
+  header?: string;
+  content: string;
+  location: [number, number];
+  burnRate: number;
+  timestamp: string;
+  replies: Reply[];
+  replyCount: number;
+}
 
 interface MessagesState {
   messages: Message[];
@@ -34,27 +52,29 @@ export const messagesSlice = createSlice({
             burnRate,
             timestamp: new Date().toISOString(),
             replies: [],
+            replyCount: 0,
           },
         };
       },
     },
     // Add a reply to a message
     addReply: {
-      reducer: (state, action: PayloadAction<{ messageId: string; reply: { id: string; content: string; timestamp: string } }>) => {
+      reducer: (state, action: PayloadAction<{ messageId: string; reply: Reply }>) => {
         const { messageId, reply } = action.payload;
         const message = state.messages.find(msg => msg.id === messageId);
         if (message) {
           message.replies.push(reply);
+          message.replyCount += 1;
         }
       },
-      prepare: (messageId: string, content: string) => {
+      prepare: (messageId: string, text: string) => {
         return {
           payload: {
             messageId,
             reply: {
               id: uuidv4(),
-              content,
-              timestamp: new Date().toISOString(),
+              text,
+              timestamp: Date.now(),
             },
           },
         };

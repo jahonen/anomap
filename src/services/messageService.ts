@@ -12,6 +12,11 @@ export interface Message {
   timestamp: number;
   expiresAt: number; // Timestamp when the message expires
   replyCount: number; // Number of replies to this message
+  replies: Array<{
+    id: string;
+    text: string;
+    timestamp: number;
+  }>;
 }
 
 // In-memory storage
@@ -46,7 +51,8 @@ export function addMessage(header: string, message: string, lat: number, lng: nu
     location: { lat, lng },
     timestamp: now,
     expiresAt,
-    replyCount: 0
+    replyCount: 0,
+    replies: []
   };
   
   messages.push(newMessage);
@@ -60,6 +66,13 @@ export function addReply(messageId: string, replyText: string): boolean {
   
   // Increment reply count
   messages[messageIndex].replyCount += 1;
+  
+  // Add the reply
+  messages[messageIndex].replies.push({
+    id: generateId(),
+    text: replyText,
+    timestamp: Date.now()
+  });
   
   // Extend expiration time by 6 hours with each reply, up to a maximum of 7 days
   const MAX_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
@@ -215,7 +228,8 @@ export function addSampleMessages(centerLat: number, centerLng: number): void {
       location: { lat, lng },
       timestamp: now - (Math.random() * 12 * 60 * 60 * 1000), // Random time in the last 12 hours
       expiresAt,
-      replyCount: sample.replyCount
+      replyCount: sample.replyCount,
+      replies: []
     });
   });
   

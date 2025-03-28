@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Message, addReply, getHoursRemaining } from '../services/messageService';
+import { useDispatch } from 'react-redux';
+import { addReply as addReplyAction } from '../redux/slices/messagesSlice';
+import { Message, getHoursRemaining } from '../services/messageService';
 import Button from './Button';
 
 interface MessageDetailProps {
@@ -13,6 +15,14 @@ export default function MessageDetail({ message, onClose }: MessageDetailProps) 
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  
+  // Get Redux dispatch, but handle the case when Redux is not available
+  let dispatch: any = null;
+  try {
+    dispatch = useDispatch();
+  } catch (error) {
+    console.log('MessageDetail - Redux not available yet:', error);
+  }
   
   if (!message) return null;
   
@@ -34,16 +44,22 @@ export default function MessageDetail({ message, onClose }: MessageDetailProps) 
     setError('');
     
     try {
-      const success = addReply(message.id, replyText);
-      
-      if (success) {
-        setReplyText('');
-        // Close the detail view after a short delay to show success
-        setTimeout(() => {
-          onClose();
-        }, 500);
+      // Add reply to Redux store if available
+      if (dispatch) {
+        try {
+          dispatch(addReplyAction(message.id, replyText));
+          console.log('MessageDetail - Reply added to Redux store');
+          setReplyText('');
+          // Close the detail view after a short delay to show success
+          setTimeout(() => {
+            onClose();
+          }, 500);
+        } catch (error) {
+          console.error('Error adding reply to Redux:', error);
+          setError('An error occurred while adding your reply');
+        }
       } else {
-        setError('Failed to add reply. Message may have expired.');
+        setError('Redux store is not available');
       }
     } catch (err) {
       setError('An error occurred while adding your reply');
@@ -52,6 +68,18 @@ export default function MessageDetail({ message, onClose }: MessageDetailProps) 
       setIsSubmitting(false);
     }
   };
+  
+  // Format timestamp to readable date/time
+  const formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  };
+  
+  // Check if replies exist and is an array
+  const hasReplies = message.replies && Array.isArray(message.replies) && message.replies.length > 0;
+  
+  console.log('MessageDetail - Message:', message);
+  console.log('MessageDetail - Replies:', message.replies);
   
   return (
     <div className="message-detail-container">
@@ -67,7 +95,25 @@ export default function MessageDetail({ message, onClose }: MessageDetailProps) 
         </div>
         
         <div className="message-detail-content">
-          <p className="message-text">{message.message}</p>
+          <div className="message-bubble original-message">
+            <p className="message-text">{message.message}</p>
+            <div className="message-timestamp">{formatTimestamp(message.timestamp)}</div>
+          </div>
+          
+          {/* Display replies as alternating speech bubbles */}
+          {hasReplies && (
+            <div className="message-replies-container">
+              {message.replies.map((reply, index) => (
+                <div 
+                  key={reply.id} 
+                  className={`message-bubble reply ${index % 2 === 0 ? 'reply-right' : 'reply-left'}`}
+                >
+                  <p className="message-text">{reply.text}</p>
+                  <div className="message-timestamp">{formatTimestamp(reply.timestamp)}</div>
+                </div>
+              ))}
+            </div>
+          )}
           
           <div className="message-meta">
             <span className="message-replies">
