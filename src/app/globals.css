@@ -1214,7 +1214,11 @@ body {
   top: 10px;
   right: 10px;
   z-index: 10;
-  pointer-events: none; /* Allow clicks to pass through to the map */
+  transition: transform 0.2s ease-in-out;
+}
+
+.map-logo-container:hover {
+  transform: scale(1.05);
 }
 
 .map-logo {
@@ -1222,4 +1226,62 @@ body {
   height: 56px;
   opacity: 0.6;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+  transition: opacity 0.2s ease-in-out;
+}
+
+.map-logo-container:hover .map-logo {
+  opacity: 0.8;
+}
+
+/* About modal styles */
+.about-modal {
+  max-width: 500px;
+  width: 90%;
+}
+
+.about-logo-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.about-logo {
+  width: 100px;
+  height: 100px;
+  opacity: 1;
+}
+
+.about-description {
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.about-description p {
+  margin-bottom: 16px;
+}
+
+.about-info {
+  border-top: 1px solid #eee;
+  padding-top: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.about-info p {
+  margin-bottom: 8px;
+}
+
+.about-info a {
+  color: var(--orange-500);
+  text-decoration: none;
+}
+
+.about-info a:hover {
+  text-decoration: underline;
+}
+
+.terms {
+  font-style: italic;
+  margin-top: 16px;
+  color: #666;
 }
