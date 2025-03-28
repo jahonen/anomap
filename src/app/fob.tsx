@@ -5,42 +5,41 @@ import { useState, useEffect } from 'react';
 export interface FobProps {
   isEditMode?: boolean;
   isExpanded?: boolean;
-  onEditLocation: () => void;
-  onRefreshLocation: () => void;
-  onToggleExpanded: () => void;
-  onOpenMessageModal: () => void;
+  onEditLocation?: () => void;
+  onRefreshLocation?: () => void;
+  onToggleExpanded?: () => void;
+  onOpenMessageModal?: () => void;
 }
 
 export default function Fob({
   isEditMode = false,
   isExpanded = false,
-  onEditLocation,
-  onRefreshLocation,
-  onToggleExpanded,
-  onOpenMessageModal
+  onEditLocation = () => {},
+  onRefreshLocation = () => {},
+  onToggleExpanded = () => {},
+  onOpenMessageModal = () => {}
 }: FobProps) {
-  // Animation state
   const [isAnimating, setIsAnimating] = useState(false);
   
-  // Handle animation when expanded state changes
+  // Handle animation state
   useEffect(() => {
     if (isExpanded) {
       setIsAnimating(true);
       const timer = setTimeout(() => {
         setIsAnimating(false);
-      }, 300); // Match this with CSS transition duration
+      }, 300); // Match this with the animation duration in CSS
       
       return () => clearTimeout(timer);
     }
   }, [isExpanded]);
   
   return (
-    <div className="fob-container">
+    <div className="fob-container footer-relative">
       {/* Main FOB button */}
       <button 
         className={`fob-button ${isEditMode ? 'edit-mode' : ''}`}
         onClick={onToggleExpanded}
-        aria-label="Floating Action Button"
+        aria-label="Toggle options"
       >
         <svg 
           xmlns="http://www.w3.org/2000/svg" 
@@ -50,7 +49,7 @@ export default function Fob({
         >
           <path 
             fillRule="evenodd" 
-            d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 9a.75.75 0 00-1.5 0v2.25H9a.75.75 0 000 1.5h2.25V15a.75.75 0 001.5 0v-2.25H15a.75.75 0 000-1.5h-2.25V9z" 
+            d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" 
             clipRule="evenodd" 
           />
         </svg>
@@ -80,7 +79,6 @@ export default function Fob({
             <span>Edit Location</span>
           </button>
           
-          {/* Refresh Location Button */}
           <button 
             className="fob-option-button"
             onClick={onRefreshLocation}

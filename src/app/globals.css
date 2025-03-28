@@ -46,6 +46,38 @@ body {
   justify-content: center;
   font-size: 0.75rem;
   z-index: 5 !important; /* Ensure footer is above all map elements */
+  word-wrap: break-word;
+}
+
+/* Mobile styles for footer */
+@media (max-width: 768px) {
+  .app-footer {
+    height: 40px; /* Double the height on mobile */
+    padding: 5px 10px;
+  }
+  
+  .footer-content {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.2;
+    position: relative;
+  }
+  
+  .footer-attribution {
+    position: relative !important;
+    right: auto !important;
+    margin-top: 2px;
+    text-align: center;
+    width: 100%;
+  }
+}
+
+/* Update footer-relative FOB position for mobile */
+@media (max-width: 768px) {
+  .footer-relative {
+    bottom: 70px; /* Adjusted for taller footer (40px height + 30px spacing) */
+  }
 }
 
 /* FOB (Floating Action Button) styles */
@@ -57,6 +89,10 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+}
+
+.footer-relative {
+  bottom: 50px; /* 30px from the top of the footer (which is 20px tall) */
 }
 
 .fob-button {
@@ -1182,8 +1218,8 @@ body {
 }
 
 .map-logo {
-  width: 120px;
-  height: auto;
+  width: 56px;
+  height: 56px;
   opacity: 0.6;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }

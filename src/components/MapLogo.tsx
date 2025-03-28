@@ -6,7 +6,7 @@ export default function MapLogo() {
   return (
     <div className="map-logo-container">
       <img 
-        src="/images/anonmap-logo.png"
+        src="/images/anonmap_logo.png"
         alt="Anonmap Logo"
         className="map-logo"
       />
