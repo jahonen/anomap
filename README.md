@@ -1,20 +1,32 @@
-# Burnhen
+# Anonmap
 
-A location-based messaging application that allows users to drop and discover messages in their vicinity.
+A location-based anonymous messaging application that allows users to drop and discover messages in their vicinity.
 
 ## Features
 
 - **Location-Based Messaging**: Drop messages at your current location for others to discover
+- **Anonymous Communication**: No user accounts or personal information required
 - **Interactive Map**: Explore your surroundings and find messages within a 3km radius
 - **Message Flags**: Visually appealing message markers with color coding based on popularity
+- **Conversation Threads**: Reply to messages and create conversations
 - **Floating Action Button (FOB)**: Easy access to app functions with a non-intrusive UI
 - **Location Management**: Manually set your location or use device geolocation
 - **Persistent Storage**: Messages are stored in Redux and persist across sessions
+- **Location Search**: Find and navigate to specific locations on the map
+
+## Privacy First
+
+Anonmap is built with privacy as a core principle:
+- No logging of user activity
+- No tracking of user movements
+- No personal information required
+- Messages are anonymous by default
+- European-based development and hosting
 
 ## Technology Stack
 
 - **Frontend**: Next.js, React, TypeScript
-- **Map**: Leaflet.js
+- **Map**: Leaflet.js with OpenStreetMap
 - **State Management**: Redux with redux-persist
 - **Styling**: CSS Modules, Tailwind CSS
 - **Deployment**: Vercel (recommended)
@@ -31,7 +43,7 @@ A location-based messaging application that allows users to drop and discover me
 1. Clone the repository:
    ```bash
    git clone https://github.com/jahonen/anomap.git
-   cd burnhen
+   cd anonmap
    ```
 
 2. Install dependencies:
@@ -52,35 +64,19 @@ A location-based messaging application that allows users to drop and discover me
 
 ## Usage
 
-### Dropping a Message
+- **View Messages**: Messages within 3km of your location will appear as colored flags on the map
+- **Create a Message**: Click the Floating Action Button (bottom right) and select "Drop a Message"
+- **Reply to Messages**: Click on a message flag to view details and add replies
+- **Change Location**: Use the location edit feature in the FOB menu to manually set your position
+- **Search Locations**: Use the search box in the top left to find and navigate to specific places
 
-1. Click the Floating Action Button (FOB) in the bottom right corner
-2. Select "Drop a Message"
-3. Enter a header (max 12 characters) and your message (max 250 characters)
-4. Submit the form to drop your message at your current location
+## Contact
 
-### Discovering Messages
+For support or inquiries, please contact: [info@anonmap.net](mailto:info@anonmap.net)
 
-- Messages appear as colored flags on the map
-- Blue flags indicate messages with few replies
-- Red flags indicate popular messages with many replies
-- Click on a flag to view the message details
+## Website
 
-### Managing Your Location
-
-- Click the FOB and select "Edit Location" to manually set your location
-- Click on the map or drag the marker to your desired location
-- Click the FOB and select "Refresh Location" to use your device's geolocation
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Visit [anonmap.net](https://anonmap.net) for more information.
 
 ## License
 
