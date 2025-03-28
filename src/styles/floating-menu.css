@@ -1,0 +1,91 @@
+/* src/styles/floating-menu.css */
+
+.floating-menu {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.main-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: #ff7043; /* Orange brand color */
+  color: white;
+  border: none;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  z-index: 1001;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.main-button:hover {
+  background-color: #ff5722; /* Darker orange on hover */
+}
+
+.main-button:active {
+  transform: scale(0.95);
+}
+
+.menu-items {
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu-label {
+  background-color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.menu-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #ff7043; /* Orange brand color */
+  color: white;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.menu-button:hover {
+  transform: scale(1.05);
+}
+
+.menu-button:active {
+  transform: scale(0.95);
+}
+
+/* Danger button styling */
+.menu-button.danger {
+  background-color: #ef4444; /* Red color for danger actions */
+}
+
+.menu-button.danger:hover {
+  background-color: #dc2626; /* Darker red on hover */
+}
