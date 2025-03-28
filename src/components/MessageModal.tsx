@@ -1,159 +1,172 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Button from './Button';
+import { useState } from 'react';
+import { addMessage, isHeaderUnique } from '../services/messageService';
 
 interface MessageModalProps {
-  isOpen: boolean;
   onClose: () => void;
-  onSubmit: (header: string, message: string) => void;
-  userLocation: { lat: number; lng: number } | null;
+  onSubmit: (success: boolean, message?: string) => void;
+  coordinates: [number, number];
 }
 
-export default function MessageModal({ isOpen, onClose, onSubmit, userLocation }: MessageModalProps) {
+export default function MessageModal({ onClose, onSubmit, coordinates }: MessageModalProps) {
   const [header, setHeader] = useState('');
   const [message, setMessage] = useState('');
   const [headerError, setHeaderError] = useState('');
   const [messageError, setMessageError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setHeader('');
-      setMessage('');
-      setHeaderError('');
-      setMessageError('');
-    }
-  }, [isOpen]);
-
-  const handleSubmit = () => {
-    // Validate inputs
-    let isValid = true;
-
-    if (!header.trim()) {
+  // Validate header
+  const validateHeader = (value: string): boolean => {
+    if (!value.trim()) {
       setHeaderError('Header is required');
-      isValid = false;
-    } else if (header.length > 12) {
+      return false;
+    }
+    
+    if (value.length > 12) {
       setHeaderError('Header must be 12 characters or less');
-      isValid = false;
-    } else {
-      setHeaderError('');
+      return false;
     }
+    
+    // Check if header is unique in 3km radius
+    if (!isHeaderUnique(value, coordinates[0], coordinates[1])) {
+      setHeaderError('This header is already used by another message in this area');
+      return false;
+    }
+    
+    setHeaderError('');
+    return true;
+  };
 
-    if (!message.trim()) {
+  // Validate message
+  const validateMessage = (value: string): boolean => {
+    if (!value.trim()) {
       setMessageError('Message is required');
-      isValid = false;
-    } else if (message.length > 250) {
-      setMessageError('Message must be 250 characters or less');
-      isValid = false;
-    } else {
-      setMessageError('');
+      return false;
     }
+    
+    if (value.length > 250) {
+      setMessageError('Message must be 250 characters or less');
+      return false;
+    }
+    
+    setMessageError('');
+    return true;
+  };
 
-    if (isValid) {
-      onSubmit(header, message);
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate form
+    const isHeaderValid = validateHeader(header);
+    const isMessageValid = validateMessage(message);
+    
+    if (!isHeaderValid || !isMessageValid) {
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      // Add message to database
+      addMessage(header, message, coordinates[0], coordinates[1]);
+      
+      // Call onSubmit with success
+      onSubmit(true);
+    } catch (error) {
+      console.error('Error adding message:', error);
+      onSubmit(false, 'An error occurred while dropping your message');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  if (!isOpen) return null;
+  // Handle backdrop click
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   return (
-    <>
-      <div className="modal-backdrop" onClick={onClose}></div>
-      <div className="message-modal">
+    <div className="modal-backdrop" onClick={handleBackdropClick}>
+      <div className="modal-container">
         <div className="modal-header">
           <h2>Drop a Message</h2>
-          <button className="modal-close-button" onClick={onClose}>
+          <button className="modal-close" onClick={onClose}>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
             </svg>
           </button>
         </div>
         
-        <div className="modal-content">
+        <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label htmlFor="message-header">
-              Header <span className="character-count">{header.length}/12</span>
-            </label>
+            <label htmlFor="header">Header (12 chars max, must be unique in this area)</label>
             <input
-              id="message-header"
               type="text"
+              id="header"
               value={header}
               onChange={(e) => {
                 setHeader(e.target.value);
-                if (e.target.value.length <= 12) {
-                  setHeaderError('');
-                }
+                if (headerError) validateHeader(e.target.value);
               }}
               maxLength={12}
-              placeholder="Enter a unique header"
               className={headerError ? 'input-error' : ''}
+              disabled={isSubmitting}
             />
             {headerError && <div className="error-message">{headerError}</div>}
-            <div className="helper-text">Must be unique in 3 KM radius</div>
           </div>
           
           <div className="form-group">
-            <label htmlFor="message-content">
-              Message <span className="character-count">{message.length}/250</span>
-            </label>
+            <label htmlFor="message">Message (250 chars max)</label>
             <textarea
-              id="message-content"
+              id="message"
               value={message}
               onChange={(e) => {
                 setMessage(e.target.value);
-                if (e.target.value.length <= 250) {
-                  setMessageError('');
-                }
+                if (messageError) validateMessage(e.target.value);
               }}
               maxLength={250}
-              placeholder="Enter your message"
-              rows={5}
+              rows={4}
               className={messageError ? 'input-error' : ''}
+              disabled={isSubmitting}
             />
+            <div className="character-count">
+              {message.length}/250
+            </div>
             {messageError && <div className="error-message">{messageError}</div>}
           </div>
           
-          {!userLocation && (
-            <div className="warning-message">
-              Location data is required to drop a message. Please enable location services.
-            </div>
-          )}
-        </div>
-        
-        <div className="modal-footer">
-          <Button 
-            variant="secondary" 
-            size="medium" 
-            onClick={onClose}
-          >
-            Cancel
-          </Button>
-          
-          <Button 
-            variant="secondary" 
-            size="medium" 
-            onClick={() => alert('Photo upload not implemented yet')}
-            disabled={!userLocation}
-            icon={
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                <path d="M3 4V1h2v3h3v2H5v3H3V6H0V4h3zm3 6V7h3V4h7l1.83 2H21c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V10h3zm7 9c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-3.2-5c0 1.77 1.43 3.2 3.2 3.2s3.2-1.43 3.2-3.2-1.43-3.2-3.2-3.2-3.2 1.43-3.2 3.2z" />
-              </svg>
-            }
-          >
-            Add Photo
-          </Button>
-          
-          <Button 
-            variant="primary" 
-            size="medium" 
-            onClick={handleSubmit}
-            disabled={!userLocation}
-          >
-            Submit
-          </Button>
-        </div>
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </button>
+            
+            <button
+              type="button"
+              className="button button-secondary"
+              disabled={isSubmitting}
+            >
+              Add Photo
+            </button>
+            
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit'}
+            </button>
+          </div>
+        </form>
       </div>
-    </>
+    </div>
   );
 }

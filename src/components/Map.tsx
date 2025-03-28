@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import MessageLayer from './MessageLayer';
+import { Message, addSampleMessages } from '../services/messageService';
 
 // Fix Leaflet default icon issues
 function fixLeafletIcons() {
@@ -19,17 +21,20 @@ interface MapProps {
   zoom?: number;
   isEditMode?: boolean;
   onLocationChange?: (coordinates: [number, number]) => void;
+  onMessageClick?: (message: Message) => void;
 }
 
 export default function Map({ 
   coordinates = [60.1699, 24.9384], // Default to Helsinki
   zoom = 13,
   isEditMode = false,
-  onLocationChange
+  onLocationChange,
+  onMessageClick
 }: MapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [messagesInitialized, setMessagesInitialized] = useState(false);
 
   // Initialize map
   useEffect(() => {
@@ -70,6 +75,16 @@ export default function Map({
       }
     };
   }, []);
+
+  // Initialize sample messages once map is ready
+  useEffect(() => {
+    if (mapReady && coordinates) {
+      console.log('Initializing sample messages at coordinates:', coordinates);
+      // Always create new sample messages at the current location
+      addSampleMessages(coordinates[0], coordinates[1]);
+      setMessagesInitialized(true);
+    }
+  }, [mapReady, coordinates]);
 
   // Update map when center or zoom changes
   useEffect(() => {
@@ -152,6 +167,19 @@ export default function Map({
     };
   }, [coordinates, isEditMode, onLocationChange, mapReady]);
 
-  // The map container is defined in page.tsx, so we don't need to return anything here
-  return null;
+  // Render MessageLayer when map is ready
+  console.log('Map render - mapReady:', mapReady, 'coordinates:', coordinates, 'messagesInitialized:', messagesInitialized);
+  
+  return (
+    <>
+      {mapReady && mapRef.current && (
+        <MessageLayer
+          map={mapRef.current}
+          center={coordinates}
+          radius={3}
+          onMessageClick={onMessageClick}
+        />
+      )}
+    </>
+  );
 }

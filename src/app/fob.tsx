@@ -1,184 +1,126 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import Button from '../components/Button';
+import { useState, useEffect } from 'react';
 
-interface FobProps {
-  onEditLocation?: () => void;
-  onRefreshLocation?: () => void;
-  onDropMessage?: () => void;
-  onToggleExpanded?: (expanded: boolean) => void;
-  isExpanded?: boolean;
+export interface FobProps {
   isEditMode?: boolean;
+  isExpanded?: boolean;
+  onEditLocation: () => void;
+  onRefreshLocation: () => void;
+  onToggleExpanded: () => void;
+  onOpenMessageModal: () => void;
 }
 
-export default function Fob({ 
-  onEditLocation, 
-  onRefreshLocation, 
-  onDropMessage,
-  onToggleExpanded,
+export default function Fob({
+  isEditMode = false,
   isExpanded = false,
-  isEditMode = false 
+  onEditLocation,
+  onRefreshLocation,
+  onToggleExpanded,
+  onOpenMessageModal
 }: FobProps) {
-  const [isLocalExpanded, setIsLocalExpanded] = useState(isExpanded);
-  const [isHovered, setIsHovered] = useState(false);
+  // Animation state
   const [isAnimating, setIsAnimating] = useState(false);
-  const optionsRef = useRef<HTMLDivElement>(null);
   
-  // Sync local state with prop when it changes
+  // Handle animation when expanded state changes
   useEffect(() => {
-    setIsLocalExpanded(isExpanded);
+    if (isExpanded) {
+      setIsAnimating(true);
+      const timer = setTimeout(() => {
+        setIsAnimating(false);
+      }, 300); // Match this with CSS transition duration
+      
+      return () => clearTimeout(timer);
+    }
   }, [isExpanded]);
   
-  const handleMainButtonClick = () => {
-    const newExpandedState = !isLocalExpanded;
-    setIsLocalExpanded(newExpandedState);
-    setIsAnimating(true);
-    
-    // Notify parent component of expansion state change
-    if (onToggleExpanded) {
-      onToggleExpanded(newExpandedState);
-    }
-    
-    // Reset animation state after animation completes
-    setTimeout(() => {
-      setIsAnimating(false);
-    }, 500); // A bit longer than the animation duration to ensure it completes
-  };
-  
-  const handleEditLocationClick = () => {
-    if (onEditLocation) {
-      onEditLocation();
-    }
-  };
-  
-  const handleRefreshLocationClick = () => {
-    if (onRefreshLocation) {
-      onRefreshLocation();
-    }
-  };
-  
-  const handleDropMessageClick = () => {
-    if (onDropMessage) {
-      onDropMessage();
-    }
-  };
-  
-  const handleBackdropClick = () => {
-    if (isLocalExpanded) {
-      handleMainButtonClick();
-    }
-  };
-  
   return (
-    <>
-      {/* Semi-transparent backdrop when FOB is expanded */}
-      <div 
-        className={`fob-backdrop ${isLocalExpanded ? 'visible' : ''}`} 
-        onClick={handleBackdropClick}
-      />
-      
-      <div className="fob-container">
-        {/* FOB options */}
-        {(isLocalExpanded || isAnimating) && (
-          <div ref={optionsRef} className="fob-options">
-            <Button
-              variant="primary"
-              size="medium"
-              onClick={handleDropMessageClick}
-              className={`fob-option-button ${isLocalExpanded ? 'visible' : ''}`}
-              ariaLabel="Drop a Message"
-              icon={
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="currentColor" 
-                  className="fob-option-icon"
-                >
-                  <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
-                </svg>
-              }
-            >
-              Drop a Message
-            </Button>
-            
-            <Button
-              variant="primary"
-              size="medium"
-              onClick={handleEditLocationClick}
-              className={`fob-option-button ${isLocalExpanded ? 'visible' : ''}`}
-              ariaLabel="Edit Location"
-              icon={
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="currentColor" 
-                  className="fob-option-icon"
-                >
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
-                </svg>
-              }
-            >
-              Change Location
-            </Button>
-            
-            <Button
-              variant="primary"
-              size="medium"
-              onClick={handleRefreshLocationClick}
-              className={`fob-option-button ${isLocalExpanded ? 'visible' : ''}`}
-              ariaLabel="Refresh Location"
-              icon={
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  viewBox="0 0 24 24" 
-                  fill="currentColor" 
-                  className="fob-option-icon"
-                >
-                  <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 9h7V2l-2.35 4.35z" />
-                </svg>
-              }
-            >
-              Refresh Location
-            </Button>
-          </div>
-        )}
-        
-        {/* Main FOB button */}
-        <button 
-          className={`fob-button ${isEditMode ? 'fob-button-active' : ''}`}
-          onClick={handleMainButtonClick}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          style={{
-            transform: isHovered ? 'scale(1.1)' : 'scale(1)',
-            transition: 'transform 0.2s ease-in-out'
-          }}
-          aria-label="Action Button"
+    <div className="fob-container">
+      {/* Main FOB button */}
+      <button 
+        className={`fob-button ${isEditMode ? 'edit-mode' : ''}`}
+        onClick={onToggleExpanded}
+        aria-label="Floating Action Button"
+      >
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          viewBox="0 0 24 24" 
+          fill="currentColor" 
+          className="w-6 h-6"
         >
-          {isEditMode ? (
-            // Show checkmark icon when in edit mode
+          <path 
+            fillRule="evenodd" 
+            d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 9a.75.75 0 00-1.5 0v2.25H9a.75.75 0 000 1.5h2.25V15a.75.75 0 001.5 0v-2.25H15a.75.75 0 000-1.5h-2.25V9z" 
+            clipRule="evenodd" 
+          />
+        </svg>
+      </button>
+      
+      {/* FOB options */}
+      {isExpanded && (
+        <div className={`fob-options ${isAnimating ? 'animating' : ''}`}>
+          {/* Edit Location Button */}
+          <button 
+            className={`fob-option-button ${isEditMode ? 'active' : ''}`}
+            onClick={onEditLocation}
+            aria-label="Edit Location"
+          >
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
               viewBox="0 0 24 24" 
-              fill="white" 
-              className="fob-icon"
+              fill="currentColor" 
+              className="w-6 h-6"
             >
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+              <path 
+                fillRule="evenodd" 
+                d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" 
+                clipRule="evenodd" 
+              />
             </svg>
-          ) : (
-            // Show plus icon by default with rotation animation
+            <span>Edit Location</span>
+          </button>
+          
+          {/* Refresh Location Button */}
+          <button 
+            className="fob-option-button"
+            onClick={onRefreshLocation}
+            aria-label="Refresh Location"
+          >
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
               viewBox="0 0 24 24" 
-              fill="white" 
-              className={`fob-icon ${isLocalExpanded ? 'fob-icon-rotate' : ''}`}
+              fill="currentColor" 
+              className="w-6 h-6"
             >
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+              <path 
+                fillRule="evenodd" 
+                d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.918z" 
+                clipRule="evenodd" 
+              />
             </svg>
-          )}
-        </button>
-      </div>
-    </>
+            <span>Refresh Location</span>
+          </button>
+          
+          {/* Drop a Message Button */}
+          <button 
+            className="fob-option-button"
+            onClick={onOpenMessageModal}
+            aria-label="Drop a Message"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              viewBox="0 0 24 24" 
+              fill="currentColor" 
+              className="w-6 h-6"
+            >
+              <path 
+                d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-12.15 12.15a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32L19.513 8.2z" 
+              />
+            </svg>
+            <span>Drop a Message</span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

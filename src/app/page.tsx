@@ -1,132 +1,192 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useLocation } from '../hooks/useLocation';
 import Fob from './fob';
 import Footer from './footer';
 import MessageModal from '../components/MessageModal';
-import { useLocation } from '../hooks/useLocation';
-import { addMessage, isHeaderUnique } from '../services/messageService';
+import MessageDetail from '../components/MessageDetail';
+import { Message, addSampleMessages } from '../services/messageService';
 
-// Dynamically import the Map component to avoid SSR issues with Leaflet
+// Import Map component dynamically to avoid SSR issues with Leaflet
 const Map = dynamic(() => import('../components/Map'), {
   ssr: false,
-  loading: () => <div>Loading map...</div>
+  loading: () => <div className="map-loading">Loading map...</div>
 });
 
 export default function Home() {
-  const { coordinates, setManualLocation, refreshLocation, source } = useLocation();
+  // Location state
+  const { 
+    coordinates, 
+    loading: locationLoading, 
+    error: locationError, 
+    refreshLocation, 
+    setManualLocation 
+  } = useLocation();
+  
+  // UI state
   const [isEditMode, setIsEditMode] = useState(false);
   const [isFobExpanded, setIsFobExpanded] = useState(false);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [messageSubmitStatus, setMessageSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [statusMessage, setStatusMessage] = useState('');
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [mapKey, setMapKey] = useState(0); // Force re-render of map when needed
 
-  // Reset edit mode when location changes
+  // Initialize sample messages when coordinates are available
   useEffect(() => {
-    if (isEditMode) {
-      console.log('Location changed, resetting edit mode');
-      setIsEditMode(false);
+    if (coordinates && coordinates[0] && coordinates[1]) {
+      console.log('Page: Initializing sample messages with coordinates:', coordinates);
+      addSampleMessages(coordinates[0], coordinates[1]);
+      
+      // Force map re-render to ensure messages are displayed
+      setMapKey(prev => prev + 1);
     }
-  }, [coordinates, isEditMode]);
+  }, [coordinates]);
 
-  // Handle FOB button clicks
+  // Handle toast messages
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  // Handle location edit mode toggle
   const handleEditLocation = () => {
-    console.log('Edit location mode activated');
-    setIsEditMode(true);
-    setIsFobExpanded(false); // Close FOB after clicking
+    setIsEditMode(!isEditMode);
+    setIsFobExpanded(false);
   };
 
+  // Handle location refresh
   const handleRefreshLocation = () => {
-    console.log('Refreshing location');
     refreshLocation();
-    setIsFobExpanded(false); // Close FOB after clicking
+    setIsFobExpanded(false);
   };
 
-  const handleDropMessage = () => {
-    console.log('Opening message modal');
+  // Handle FOB expansion toggle
+  const handleToggleFob = () => {
+    setIsFobExpanded(!isFobExpanded);
+  };
+
+  // Handle message modal open
+  const handleOpenMessageModal = () => {
     setIsMessageModalOpen(true);
-    setIsFobExpanded(false); // Close FOB after clicking
+    setIsFobExpanded(false);
+  };
+
+  // Handle message modal close
+  const handleCloseMessageModal = () => {
+    setIsMessageModalOpen(false);
   };
 
   // Handle message submission
-  const handleMessageSubmit = (header: string, message: string) => {
-    if (!coordinates || !coordinates[0] || !coordinates[1]) {
-      setMessageSubmitStatus('error');
-      setStatusMessage('Location data is required to drop a message.');
-      return;
-    }
-
-    const lat = coordinates[0];
-    const lng = coordinates[1];
-
-    // Check if header is unique in 3km radius
-    if (!isHeaderUnique(header, lat, lng)) {
-      setMessageSubmitStatus('error');
-      setStatusMessage('This header is already used by another message in this area. Please choose a unique header.');
-      return;
-    }
-
-    try {
-      // Add message to database
-      const newMessage = addMessage(header, message, lat, lng);
-      console.log('Message added:', newMessage);
+  const handleMessageSubmit = (success: boolean, message?: string) => {
+    setIsMessageModalOpen(false);
+    
+    if (success) {
+      setToastMessage({
+        text: 'Message dropped successfully!',
+        type: 'success'
+      });
       
-      // Show success message and close modal
-      setMessageSubmitStatus('success');
-      setStatusMessage('Message dropped successfully!');
-      
-      // Reset status and close modal after delay
-      setTimeout(() => {
-        setMessageSubmitStatus('idle');
-        setStatusMessage('');
-        setIsMessageModalOpen(false);
-      }, 1500);
-    } catch (error) {
-      console.error('Error adding message:', error);
-      setMessageSubmitStatus('error');
-      setStatusMessage('An error occurred while dropping your message. Please try again.');
+      // Force map re-render to show the new message
+      setMapKey(prev => prev + 1);
+    } else {
+      setToastMessage({
+        text: message || 'Failed to drop message. Please try again.',
+        type: 'error'
+      });
     }
+  };
+
+  // Handle message click on map
+  const handleMessageClick = (message: Message) => {
+    console.log('Message clicked:', message);
+    setSelectedMessage(message);
+  };
+
+  // Handle message detail close
+  const handleCloseMessageDetail = () => {
+    setSelectedMessage(null);
   };
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between">
-      {/* Map Component */}
-      <div id="map-container">
+      {/* Map Container */}
+      <div id="map-container" className="w-full h-screen"></div>
+      
+      {/* Map Component (dynamically loaded) */}
+      {coordinates && (
         <Map 
+          key={mapKey} // Force re-render when needed
           coordinates={coordinates} 
-          onLocationChange={setManualLocation} 
           isEditMode={isEditMode}
+          onLocationChange={setManualLocation}
+          onMessageClick={handleMessageClick}
         />
-      </div>
-
+      )}
+      
       {/* Floating Action Button */}
       <Fob 
-        onEditLocation={handleEditLocation} 
-        onRefreshLocation={handleRefreshLocation}
-        onDropMessage={handleDropMessage}
-        onToggleExpanded={setIsFobExpanded}
-        isExpanded={isFobExpanded}
         isEditMode={isEditMode}
+        isExpanded={isFobExpanded}
+        onEditLocation={handleEditLocation}
+        onRefreshLocation={handleRefreshLocation}
+        onToggleExpanded={handleToggleFob}
+        onOpenMessageModal={handleOpenMessageModal}
       />
-
-      {/* Message Modal */}
-      <MessageModal 
-        isOpen={isMessageModalOpen}
-        onClose={() => setIsMessageModalOpen(false)}
-        onSubmit={handleMessageSubmit}
-        userLocation={coordinates ? { lat: coordinates[0], lng: coordinates[1] } : null}
-      />
-
-      {/* Status message toast */}
-      {messageSubmitStatus !== 'idle' && (
-        <div className={`status-toast ${messageSubmitStatus === 'success' ? 'success' : 'error'}`}>
-          {statusMessage}
-        </div>
-      )}
-
+      
       {/* Footer */}
       <Footer />
+      
+      {/* Message Modal */}
+      {isMessageModalOpen && coordinates && (
+        <MessageModal 
+          onClose={handleCloseMessageModal}
+          onSubmit={handleMessageSubmit}
+          coordinates={coordinates}
+        />
+      )}
+      
+      {/* Message Detail View */}
+      {selectedMessage && (
+        <MessageDetail
+          message={selectedMessage}
+          onClose={handleCloseMessageDetail}
+        />
+      )}
+      
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className={`toast-notification ${toastMessage.type}`}>
+          {toastMessage.text}
+        </div>
+      )}
+      
+      {/* Edit Mode Indicator */}
+      {isEditMode && (
+        <div className="edit-mode-indicator">
+          Tap on the map or drag the marker to set your location
+        </div>
+      )}
+      
+      {/* Location Loading Indicator */}
+      {locationLoading && (
+        <div className="location-loading">
+          Detecting your location...
+        </div>
+      )}
+      
+      {/* Location Error Message */}
+      {locationError && (
+        <div className="location-error">
+          {locationError}
+        </div>
+      )}
     </main>
   );
 }
