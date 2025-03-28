@@ -7,6 +7,7 @@ import Fob from './fob';
 import Footer from './footer';
 import MessageModal from '../components/MessageModal';
 import MessageDetail from '../components/MessageDetail';
+import MapLogo from '../components/MapLogo';
 import { Message } from '../services/messageService';
 
 // Import Map component dynamically to avoid SSR issues with Leaflet
@@ -128,6 +129,9 @@ export default function Home() {
           onMessageClick={handleMessageClick}
         />
       )}
+      
+      {/* Map Logo */}
+      <MapLogo />
       
       {/* Floating Action Button */}
       <Fob 

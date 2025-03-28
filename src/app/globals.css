@@ -1171,3 +1171,19 @@ body {
   margin-top: 15px !important;
   clear: both;
 }
+
+/* Map logo styles */
+.map-logo-container {
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  z-index: 10;
+  pointer-events: none; /* Allow clicks to pass through to the map */
+}
+
+.map-logo {
+  width: 120px;
+  height: auto;
+  opacity: 0.6;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
