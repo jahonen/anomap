@@ -8,176 +8,150 @@ import 'leaflet/dist/leaflet.css';
 function fixLeafletIcons() {
   delete L.Icon.Default.prototype._getIconUrl;
   L.Icon.Default.mergeOptions({
-    iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+    iconUrl: '/marker-icon.png',
+    iconRetinaUrl: '/marker-icon-2x.png',
+    shadowUrl: '/marker-shadow.png',
   });
 }
 
 interface MapProps {
-  center: [number, number];
+  coordinates?: [number, number];
   zoom?: number;
   isEditMode?: boolean;
-  onLocationChange?: (newLocation: [number, number]) => void;
+  onLocationChange?: (coordinates: [number, number]) => void;
 }
 
 export default function Map({ 
-  center, 
-  zoom = 13, 
+  coordinates = [60.1699, 24.9384], // Default to Helsinki
+  zoom = 13,
   isEditMode = false,
-  onLocationChange 
+  onLocationChange
 }: MapProps) {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-  const previousIsEditMode = useRef(isEditMode);
-
-  // Log prop changes for debugging
-  useEffect(() => {
-    console.log('Map props changed - isEditMode:', isEditMode, 'center:', center);
-    
-    // Track changes to edit mode
-    previousIsEditMode.current = isEditMode;
-  }, [isEditMode, center]);
-
-  // Detect if device is mobile
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    return () => {
-      window.removeEventListener('resize', checkMobile);
-    };
-  }, []);
+  const [mapReady, setMapReady] = useState(false);
 
   // Initialize map
   useEffect(() => {
-    // Fix Leaflet icon issues
-    fixLeafletIcons();
-
-    // Initialize map only if it doesn't exist yet
-    if (!mapInstanceRef.current && mapRef.current) {
-      console.log('Initializing map with center:', center);
-      const map = L.map(mapRef.current).setView(center, zoom);
+    if (typeof window !== 'undefined') {
+      // Fix Leaflet icon issues
+      fixLeafletIcons();
       
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '', // Empty attribution since we're showing it in the footer
-        maxZoom: 19,
-      }).addTo(map);
-      
-      // Add a marker at the center
-      markerRef.current = L.marker(center, { draggable: isEditMode })
-        .addTo(map)
-        .bindPopup(isEditMode ? 'Drag me to set your location' : 'You are here');
-      
-      if (isEditMode) {
-        markerRef.current.openPopup();
+      // Create map instance if it doesn't exist
+      if (!mapRef.current) {
+        console.log('Creating new map instance');
+        
+        // Initialize the map
+        const map = L.map('map-container', {
+          center: coordinates,
+          zoom: zoom,
+          zoomControl: true,
+          attributionControl: true,
+        });
+        
+        // Add tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Store map reference
+        mapRef.current = map;
+        setMapReady(true);
       }
-      
-      // Store map instance in ref
-      mapInstanceRef.current = map;
     }
     
-    // Clean up function
+    // Cleanup function
     return () => {
-      if (mapInstanceRef.current) {
-        console.log('Cleaning up map instance');
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+      if (mapRef.current) {
+        console.log('Removing map instance');
+        mapRef.current.remove();
+        mapRef.current = null;
         markerRef.current = null;
       }
     };
-  }, []); // Empty dependency array ensures map is only created once
+  }, []);
 
-  // Update map view and marker when center or zoom changes
+  // Update map when center or zoom changes
   useEffect(() => {
-    if (mapInstanceRef.current) {
-      console.log('Updating map view to center:', center, 'zoom:', zoom);
-      mapInstanceRef.current.setView(center, zoom);
-      
-      if (markerRef.current) {
-        markerRef.current.setLatLng(center);
-      }
+    if (mapRef.current && mapReady) {
+      console.log('Updating map view to:', coordinates);
+      mapRef.current.setView(coordinates, zoom);
     }
-  }, [center, zoom]);
+  }, [coordinates, zoom, mapReady]);
 
-  // Update marker draggability when edit mode changes
+  // Handle marker creation and updates
   useEffect(() => {
-    console.log('Edit mode changed to:', isEditMode);
-    if (markerRef.current) {
-      // Update marker draggability
+    if (!mapRef.current || !mapReady) return;
+    
+    const map = mapRef.current;
+    
+    // Create or update marker
+    if (!markerRef.current && coordinates) {
+      console.log('Creating new marker at:', coordinates);
+      
+      // Create marker with default icon (already fixed by fixLeafletIcons)
+      const marker = L.marker(coordinates, { 
+        draggable: isEditMode 
+      }).addTo(map);
+      
+      // Add drag events if in edit mode
       if (isEditMode) {
-        console.log('Enabling marker dragging');
-        markerRef.current.dragging?.enable();
-        markerRef.current.setPopupContent('Drag me to set your location');
-        markerRef.current.openPopup();
-      } else {
-        console.log('Disabling marker dragging');
-        markerRef.current.dragging?.disable();
-        markerRef.current.setPopupContent('You are here');
-        markerRef.current.closePopup();
+        marker.on('dragend', function(e) {
+          const position = e.target.getLatLng();
+          const newCoords: [number, number] = [position.lat, position.lng];
+          console.log('Marker dragged to:', newCoords);
+          
+          if (onLocationChange) {
+            onLocationChange(newCoords);
+          }
+        });
+      }
+      
+      markerRef.current = marker;
+    } 
+    // Update existing marker
+    else if (markerRef.current && coordinates) {
+      console.log('Updating marker position to:', coordinates);
+      markerRef.current.setLatLng(coordinates);
+      
+      // Update draggable state
+      if (markerRef.current.dragging) {
+        if (isEditMode && !markerRef.current.dragging.enabled()) {
+          markerRef.current.dragging.enable();
+        } else if (!isEditMode && markerRef.current.dragging.enabled()) {
+          markerRef.current.dragging.disable();
+        }
       }
     }
-  }, [isEditMode]);
-
-  // Set up map click handler for location selection
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
     
+    // Handle map clicks in edit mode
     const handleMapClick = (e: L.LeafletMouseEvent) => {
-      // Only process clicks when in edit mode
-      if (!isEditMode) return;
-      
-      const { lat, lng } = e.latlng;
-      console.log('Map clicked at:', lat, lng, 'isEditMode:', isEditMode);
-      
-      // Update marker position
-      if (markerRef.current) {
-        markerRef.current.setLatLng([lat, lng]);
-        markerRef.current.openPopup();
-      }
-      
-      // Notify parent component
-      if (onLocationChange) {
-        console.log('Calling onLocationChange with:', [lat, lng]);
-        onLocationChange([lat, lng]);
+      if (isEditMode) {
+        const newCoords: [number, number] = [e.latlng.lat, e.latlng.lng];
+        console.log('Map clicked at:', newCoords);
+        
+        if (onLocationChange) {
+          onLocationChange(newCoords);
+        }
       }
     };
     
-    // Set up marker drag end handler
-    const handleMarkerDragEnd = () => {
-      if (!markerRef.current || !onLocationChange) return;
-      
-      const position = markerRef.current.getLatLng();
-      console.log('Marker dragged to:', position.lat, position.lng);
-      onLocationChange([position.lat, position.lng]);
-    };
-    
-    // Add handlers
-    console.log('Adding map handlers, isEditMode:', isEditMode);
-    mapInstanceRef.current.on('click', handleMapClick);
-    
-    if (markerRef.current) {
-      markerRef.current.on('dragend', handleMarkerDragEnd);
+    // Add or remove click handler based on edit mode
+    if (isEditMode) {
+      console.log('Adding map click handler for edit mode');
+      map.on('click', handleMapClick);
+    } else {
+      console.log('Removing map click handler for edit mode');
+      map.off('click', handleMapClick);
     }
     
-    // Clean up
     return () => {
-      if (mapInstanceRef.current) {
-        console.log('Removing map handlers');
-        mapInstanceRef.current.off('click', handleMapClick);
-      }
-      
-      if (markerRef.current) {
-        markerRef.current.off('dragend', handleMarkerDragEnd);
+      if (mapRef.current) {
+        mapRef.current.off('click', handleMapClick);
       }
     };
-  }, [isEditMode, onLocationChange]);
+  }, [coordinates, isEditMode, onLocationChange, mapReady]);
 
-  return <div ref={mapRef} id="map-container" />;
+  // The map container is defined in page.tsx, so we don't need to return anything here
+  return null;
 }
