@@ -34,6 +34,7 @@ export default function Home() {
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [mapKey, setMapKey] = useState(0); // Force re-render of map when needed
   const [mapZoom, setMapZoom] = useState<number | undefined>(undefined);
+  const [isHeatmapMode, setIsHeatmapMode] = useState(false);
 
   // Check for URL parameters on component mount
   useEffect(() => {
@@ -89,9 +90,14 @@ export default function Home() {
     setIsFobExpanded(false);
   };
 
-  // Handle FOB expansion toggle
+  // Handle FOB toggle
   const handleToggleFob = () => {
     setIsFobExpanded(!isFobExpanded);
+  };
+
+  // Handle heatmap toggle
+  const handleToggleHeatmap = () => {
+    setIsHeatmapMode(!isHeatmapMode);
   };
 
   // Handle message modal open
@@ -147,6 +153,7 @@ export default function Home() {
           key={mapKey} // Force re-render when needed
           coordinates={coordinates} 
           isEditMode={isEditMode}
+          isHeatmapMode={isHeatmapMode}
           onLocationChange={setManualLocation}
           onMessageClick={handleMessageClick}
           zoom={mapZoom}
@@ -160,10 +167,12 @@ export default function Home() {
       <Fob 
         isEditMode={isEditMode}
         isExpanded={isFobExpanded}
+        isHeatmapMode={isHeatmapMode}
         onEditLocation={handleEditLocation}
         onRefreshLocation={handleRefreshLocation}
         onToggleExpanded={handleToggleFob}
         onOpenMessageModal={handleOpenMessageModal}
+        onToggleHeatmap={handleToggleHeatmap}
       />
       
       {/* Footer */}

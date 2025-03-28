@@ -85,9 +85,16 @@ export function useLocation() {
         return;
       }
       
+      // Add a backup timeout in case the geolocation API hangs
+      const timeoutId = setTimeout(() => {
+        console.log('Geolocation request timed out with our backup timer');
+        resolve(null);
+      }, 15000); // 15 seconds backup timeout
+      
       navigator.geolocation.getCurrentPosition(
         // Success callback
         (position) => {
+          clearTimeout(timeoutId); // Clear the backup timeout
           const { latitude, longitude } = position.coords;
           console.log('Geolocation successful:', latitude, longitude);
           resolve({
@@ -97,14 +104,15 @@ export function useLocation() {
         },
         // Error callback
         (error) => {
-          console.error('Geolocation error:', error.message);
+          clearTimeout(timeoutId); // Clear the backup timeout
+          console.log('Geolocation error:', error.message);
           resolve(null);
         },
         // Options
         { 
           enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 0
+          timeout: 10000, // Increased from 5000 to 10000 (10 seconds)
+          maximumAge: 60000 // Allow cached positions up to 1 minute old
         }
       );
     });

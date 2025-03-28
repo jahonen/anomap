@@ -6,10 +6,12 @@ import 'leaflet/dist/leaflet.css';
 import { OpenStreetMapProvider } from 'leaflet-geosearch';
 import 'leaflet-geosearch/dist/geosearch.css';
 import MessageLayer from './MessageLayer';
+import HeatmapLayer from './HeatmapLayer';
 import { Message } from '../services/messageService';
 
 // Fix Leaflet default icon issues
 function fixLeafletIcons() {
+  // @ts-ignore - _getIconUrl exists in Leaflet's implementation but TypeScript doesn't know about it
   delete L.Icon.Default.prototype._getIconUrl;
   L.Icon.Default.mergeOptions({
     iconUrl: '/marker-icon.png',
@@ -22,6 +24,7 @@ interface MapProps {
   coordinates?: [number, number];
   zoom?: number;
   isEditMode?: boolean;
+  isHeatmapMode?: boolean;
   onLocationChange?: (coordinates: [number, number]) => void;
   onMessageClick?: (message: Message) => void;
 }
@@ -30,6 +33,7 @@ export default function Map({
   coordinates = [60.1699, 24.9384], // Default to Helsinki
   zoom = 13,
   isEditMode = false,
+  isHeatmapMode = false,
   onLocationChange,
   onMessageClick
 }: MapProps) {
@@ -38,6 +42,7 @@ export default function Map({
   const [mapReady, setMapReady] = useState(false);
   const [messagesInitialized, setMessagesInitialized] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(zoom);
+  const [previousZoom, setPreviousZoom] = useState(zoom);
 
   // Initialize map
   useEffect(() => {
@@ -73,12 +78,12 @@ export default function Map({
             const container = L.DomUtil.create('div', 'leaflet-control leaflet-bar leaflet-control-search');
             
             // Create input
-            const input = L.DomUtil.create('input', 'map-search-input', container);
+            const input = L.DomUtil.create('input', 'search-input', container);
             input.type = 'text';
-            input.placeholder = 'Search for a location';
+            input.placeholder = 'Search location...';
             
             // Create button
-            const button = L.DomUtil.create('button', 'map-search-button', container);
+            const button = L.DomUtil.create('button', 'search-button', container);
             button.innerHTML = '🔍';
             
             // Prevent map click events when interacting with the control
@@ -88,8 +93,7 @@ export default function Map({
             // Add search functionality
             const provider = new OpenStreetMapProvider();
             
-            const handleSearch = async () => {
-              const query = input.value;
+            const handleSearch = async (query: string) => {
               if (!query) return;
               
               try {
@@ -125,10 +129,12 @@ export default function Map({
             };
             
             // Add event listeners
-            L.DomEvent.on(button, 'click', handleSearch);
-            L.DomEvent.on(input, 'keypress', (e) => {
-              if (e.keyCode === 13) { // Enter key
-                handleSearch();
+            L.DomEvent.on(button, 'click', () => {
+              handleSearch(input.value);
+            });
+            L.DomEvent.on(input, 'keydown', (e: KeyboardEvent) => {
+              if (e.key === 'Enter') {
+                handleSearch(input.value);
               }
             });
             
@@ -220,18 +226,48 @@ export default function Map({
     }
   }, [coordinates, currentZoom, mapReady]);
 
-  // Render MessageLayer when map is ready
-  console.log('Map render - mapReady:', mapReady, 'coordinates:', coordinates, 'messagesInitialized:', messagesInitialized);
+  // Effect to handle zoom level changes when toggling heatmap mode
+  useEffect(() => {
+    if (!mapRef.current || !mapReady) return;
+    
+    console.log('Heatmap mode changed:', isHeatmapMode);
+    
+    if (isHeatmapMode) {
+      // Store current zoom level before switching to heatmap
+      setPreviousZoom(currentZoom);
+      
+      // Zoom out for heatmap view (zoom level 10 gives a good overview)
+      mapRef.current.setZoom(10);
+    } else {
+      // Return to previous zoom level when switching back to message view
+      if (previousZoom) {
+        mapRef.current.setZoom(previousZoom);
+      }
+    }
+  }, [isHeatmapMode, mapReady, currentZoom, previousZoom]);
+
+  // Render MessageLayer or HeatmapLayer when map is ready
+  console.log('Map render - mapReady:', mapReady, 'coordinates:', coordinates, 'messagesInitialized:', messagesInitialized, 'isHeatmapMode:', isHeatmapMode);
   
   return (
     <>
       {mapReady && mapRef.current && (
-        <MessageLayer
-          map={mapRef.current}
-          center={coordinates}
-          radius={3}
-          onMessageClick={onMessageClick}
-        />
+        <>
+          {!isHeatmapMode && (
+            <MessageLayer
+              map={mapRef.current}
+              center={coordinates}
+              radius={3}
+              onMessageClick={onMessageClick}
+            />
+          )}
+          
+          {isHeatmapMode && (
+            <HeatmapLayer
+              map={mapRef.current}
+            />
+          )}
+        </>
       )}
     </>
   );
