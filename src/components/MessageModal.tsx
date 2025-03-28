@@ -181,8 +181,9 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
             
             <button
               type="button"
-              className="button button-secondary"
-              disabled={isSubmitting}
+              className="button button-secondary button-disabled"
+              disabled={true}
+              title="Photo uploads coming soon!"
             >
               Add Photo
             </button>
