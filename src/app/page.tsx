@@ -102,12 +102,23 @@ export default function Home() {
 
   // Handle message modal open
   const handleOpenMessageModal = () => {
-    setIsMessageModalOpen(true);
-    setIsFobExpanded(false);
+    console.log('Opening message modal, coordinates:', coordinates);
+    // Make sure we don't open the modal if coordinates aren't available
+    if (coordinates) {
+      setIsMessageModalOpen(true);
+      setIsFobExpanded(false);
+    } else {
+      console.error('Cannot open message modal: coordinates not available');
+      setToastMessage({
+        text: 'Cannot drop message: location not available',
+        type: 'error'
+      });
+    }
   };
 
   // Handle message modal close
   const handleCloseMessageModal = () => {
+    console.log('Closing message modal');
     setIsMessageModalOpen(false);
   };
 
@@ -142,6 +153,12 @@ export default function Home() {
     setSelectedMessage(null);
   };
 
+  // Handle location change
+  const handleLocationChange = (newCoordinates: [number, number]) => {
+    console.log('Location changed:', newCoordinates);
+    setManualLocation(newCoordinates);
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-between">
       {/* Map Container */}
@@ -154,7 +171,7 @@ export default function Home() {
           coordinates={coordinates} 
           isEditMode={isEditMode}
           isHeatmapMode={isHeatmapMode}
-          onLocationChange={setManualLocation}
+          onLocationChange={handleLocationChange}
           onMessageClick={handleMessageClick}
           zoom={mapZoom}
         />
