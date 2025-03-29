@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { 
   addMessage, 
   getMessagesInRadius,
@@ -6,13 +6,13 @@ import {
 } from '../../../services/redisMessageService';
 
 // GET /api/messages?lat=x&lng=y&radius=z
-export async function GET(request: NextRequest) {
+export async function GET(request) {
   try {
     // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const lat = parseFloat(searchParams.get('lat') || '0');
-    const lng = parseFloat(searchParams.get('lng') || '0');
-    const radius = parseFloat(searchParams.get('radius') || '3');
+    const url = new URL(request.url);
+    const lat = parseFloat(url.searchParams.get('lat') || '0');
+    const lng = parseFloat(url.searchParams.get('lng') || '0');
+    const radius = parseFloat(url.searchParams.get('radius') || '3');
     
     // Validate parameters
     if (isNaN(lat) || isNaN(lng) || isNaN(radius)) {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/messages
-export async function POST(request: NextRequest) {
+export async function POST(request) {
   try {
     // Parse request body
     const body = await request.json();
@@ -55,6 +55,13 @@ export async function POST(request: NextRequest) {
     
     // Add message
     const newMessage = await addMessage(header, message, lat, lng);
+    
+    if (!newMessage) {
+      return NextResponse.json(
+        { error: 'Failed to add message' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json(newMessage, { status: 201 });
   } catch (error) {

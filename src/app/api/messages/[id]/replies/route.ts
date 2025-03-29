@@ -1,16 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { addReply, getMessageById } from '../../../../../services/redisMessageService';
 
 // POST /api/messages/[id]/replies
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request, { params }) {
   try {
-    const messageId = params.id;
+    const { id } = params;
     
     // Check if message exists
-    const message = await getMessageById(messageId);
+    const message = await getMessageById(id);
     if (!message) {
       return NextResponse.json(
         { error: 'Message not found' },
@@ -31,7 +28,7 @@ export async function POST(
     }
     
     // Add reply
-    const reply = await addReply(messageId, text);
+    const reply = await addReply(id, text);
     
     if (!reply) {
       return NextResponse.json(
@@ -41,7 +38,7 @@ export async function POST(
     }
     
     // Get updated message
-    const updatedMessage = await getMessageById(messageId);
+    const updatedMessage = await getMessageById(id);
     
     return NextResponse.json({
       message: updatedMessage,

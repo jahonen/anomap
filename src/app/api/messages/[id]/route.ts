@@ -1,16 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getMessageById, deleteMessage } from '../../../../services/redisMessageService';
 
 // GET /api/messages/[id]
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request, { params }) {
   try {
-    const messageId = params.id;
+    const { id } = params;
     
     // Get message
-    const message = await getMessageById(messageId);
+    const message = await getMessageById(id);
     
     if (!message) {
       return NextResponse.json(
@@ -30,15 +27,12 @@ export async function GET(
 }
 
 // DELETE /api/messages/[id]
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request, { params }) {
   try {
-    const messageId = params.id;
+    const { id } = params;
     
     // Delete message
-    const success = await deleteMessage(messageId);
+    const success = await deleteMessage(id);
     
     if (!success) {
       return NextResponse.json(

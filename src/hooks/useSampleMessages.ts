@@ -59,41 +59,49 @@ export function useSampleMessages(centerLat: number, centerLng: number) {
   const { messages, addMessage, addReply } = useMessages();
   
   useEffect(() => {
-    // Only add sample messages if there are none
-    if (messages.length === 0 && centerLat && centerLng) {
+    // Only generate sample messages if there are none
+    if (messages.length === 0) {
       console.log('Generating sample messages around', centerLat, centerLng);
       
-      // Generate 10-15 random messages in the area
-      const messageCount = Math.floor(Math.random() * 6) + 10; // 10-15 messages
-      
-      for (let i = 0; i < messageCount; i++) {
-        // Random position within ~1km of the center
-        // 0.01 in lat/lng is roughly 1km
-        const latOffset = (Math.random() - 0.5) * 0.02;
-        const lngOffset = (Math.random() - 0.5) * 0.02;
+      const generateSampleMessages = async () => {
+        const messageCount = 10; // Number of sample messages to generate
         
-        const lat = centerLat + latOffset;
-        const lng = centerLng + lngOffset;
-        
-        // Random topic and content
-        const topicIndex = Math.floor(Math.random() * topics.length);
-        const contentIndex = Math.floor(Math.random() * contents.length);
-        
-        const header = topics[topicIndex];
-        const content = contents[contentIndex];
-        
-        // Add the message
-        const message = addMessage(header, content, lat, lng);
-        
-        // Add random number of replies (0-5)
-        const replyCount = Math.floor(Math.random() * 6);
-        for (let j = 0; j < replyCount; j++) {
-          const replyIndex = Math.floor(Math.random() * replies.length);
-          addReply(message.id, replies[replyIndex]);
+        for (let i = 0; i < messageCount; i++) {
+          // Generate random coordinates within ~1km radius
+          const latOffset = (Math.random() - 0.5) * 0.02;
+          const lngOffset = (Math.random() - 0.5) * 0.02;
+          
+          const lat = centerLat + latOffset;
+          const lng = centerLng + lngOffset;
+          
+          // Pick random topic and content
+          const topicIndex = Math.floor(Math.random() * topics.length);
+          const contentIndex = Math.floor(Math.random() * contents.length);
+          
+          const header = topics[topicIndex];
+          const content = contents[contentIndex];
+          
+          try {
+            // Add the message
+            const message = await addMessage(header, content, lat, lng);
+            
+            if (message) {
+              // Add random number of replies (0-5)
+              const replyCount = Math.floor(Math.random() * 6);
+              for (let j = 0; j < replyCount; j++) {
+                const replyIndex = Math.floor(Math.random() * replies.length);
+                await addReply(message.id, replies[replyIndex]);
+              }
+            }
+          } catch (error) {
+            console.error('Error generating sample message:', error);
+          }
         }
-      }
+        
+        console.log('Generated', messageCount, 'sample messages');
+      };
       
-      console.log('Generated', messageCount, 'sample messages');
+      generateSampleMessages();
     }
   }, [centerLat, centerLng, messages.length, addMessage, addReply]);
   
