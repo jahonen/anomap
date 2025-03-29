@@ -66,7 +66,7 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
   };
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validate form
@@ -80,9 +80,9 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
     setIsSubmitting(true);
     
     try {
-      // Add message using Context
-      addMessage(header, message, coordinates[0], coordinates[1]);
-      console.log('MessageModal - Message added using Context');
+      // Add message using Context - now async
+      const newMessage = await addMessage(header, message, coordinates[0], coordinates[1]);
+      console.log('MessageModal - Message added using Context:', newMessage);
       
       // Call onSubmit with success
       onSubmit(true);

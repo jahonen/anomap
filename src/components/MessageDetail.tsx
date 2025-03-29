@@ -1,35 +1,77 @@
 'use client';
 
-import { useState } from 'react';
-import { useDispatch } from 'react-redux';
-import { addReply as addReplyAction } from '../redux/slices/messagesSlice';
-import { Message, getHoursRemaining } from '../services/messageService';
+import { useState, useEffect, useRef } from 'react';
+import { Message } from '../services/messageService';
 import Button from './Button';
+import { useMessages, getMessageOpacity } from '../contexts/MessagesContext';
+import blueskyIcon from '../assets/images/bluesky.png';
+import redditIcon from '../assets/images/reddit.png';
+import googleMapsIcon from '../assets/images/google-maps.png';
+import appleMapsIcon from '../assets/images/apple-maps.webp';
 
 interface MessageDetailProps {
   message: Message | null;
   onClose: () => void;
 }
 
-export default function MessageDetail({ message, onClose }: MessageDetailProps) {
+export default function MessageDetail({ message: initialMessage, onClose }: MessageDetailProps) {
   const [replyText, setReplyText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [message, setMessage] = useState<Message | null>(initialMessage);
+  const repliesContainerRef = useRef<HTMLDivElement>(null);
   
-  // Get Redux dispatch, but handle the case when Redux is not available
-  let dispatch: any = null;
-  try {
-    dispatch = useDispatch();
-  } catch (error) {
-    console.log('MessageDetail - Redux not available yet:', error);
-  }
+  // Get messages context
+  const { addReply, getHoursRemaining, getMessageById } = useMessages();
+  
+  // Update the message when initialMessage changes
+  useEffect(() => {
+    setMessage(initialMessage);
+  }, [initialMessage]);
+  
+  // Scroll to the bottom of replies when they change
+  useEffect(() => {
+    if (message?.replies && message.replies.length > 0 && repliesContainerRef.current) {
+      // Ensure we scroll to the bottom after the DOM has updated
+      setTimeout(() => {
+        if (repliesContainerRef.current) {
+          repliesContainerRef.current.scrollTop = repliesContainerRef.current.scrollHeight;
+          console.log('MessageDetail - Scrolled to bottom, replies count:', message.replies.length);
+        }
+      }, 100);
+    }
+  }, [message?.replies?.length]); // Only run when the number of replies changes
   
   if (!message) return null;
   
   const hoursRemaining = getHoursRemaining(message);
-  const formattedHours = hoursRemaining.toFixed(1);
   
-  const handleSubmitReply = () => {
+  // Format timestamp to readable date/time
+  const formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  };
+  
+  // Format remaining time as requested
+  const formatRemainingTime = (hoursRemaining: number) => {
+    if (hoursRemaining >= 1) {
+      // More than 60 minutes: show hours
+      return `${Math.floor(hoursRemaining)}h`;
+    } else {
+      // Less than 60 minutes: show minutes
+      const minutesRemaining = Math.floor(hoursRemaining * 60);
+      return `${minutesRemaining}m`;
+    }
+  };
+  
+  // Check if replies exist and is an array
+  const hasReplies = message.replies && Array.isArray(message.replies) && message.replies.length > 0;
+  
+  // Handle reply submission
+  const handleReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!replyText.trim()) {
       setError('Reply cannot be empty');
       return;
@@ -44,39 +86,41 @@ export default function MessageDetail({ message, onClose }: MessageDetailProps) 
     setError('');
     
     try {
-      // Add reply to Redux store if available
-      if (dispatch) {
-        try {
-          dispatch(addReplyAction(message.id, replyText));
-          console.log('MessageDetail - Reply added to Redux store');
-          setReplyText('');
-          // Close the detail view after a short delay to show success
-          setTimeout(() => {
-            onClose();
-          }, 500);
-        } catch (error) {
-          console.error('Error adding reply to Redux:', error);
-          setError('An error occurred while adding your reply');
-        }
+      // Add reply using Context - now async
+      const success = await addReply(message.id, replyText);
+      
+      if (success) {
+        setReplyText('');
+        setSuccess('Reply added successfully');
+        
+        // Get the updated message with the new reply
+        const fetchUpdatedMessage = async () => {
+          try {
+            const updatedMessage = await getMessageById(message.id);
+            if (updatedMessage) {
+              setMessage(updatedMessage);
+            }
+          } catch (error) {
+            console.error('Error fetching updated message:', error);
+          }
+        };
+        
+        fetchUpdatedMessage();
+        
+        // Clear success message after a delay
+        setTimeout(() => {
+          setSuccess('');
+        }, 3000);
       } else {
-        setError('Redux store is not available');
+        setError('Failed to add reply. Please try again.');
       }
-    } catch (err) {
-      setError('An error occurred while adding your reply');
-      console.error('Error adding reply:', err);
+    } catch (error) {
+      console.error('Error adding reply:', error);
+      setError('Failed to add reply. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
-  
-  // Format timestamp to readable date/time
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-  };
-  
-  // Check if replies exist and is an array
-  const hasReplies = message.replies && Array.isArray(message.replies) && message.replies.length > 0;
   
   console.log('MessageDetail - Message:', message);
   console.log('MessageDetail - Replies:', message.replies);
@@ -95,93 +139,107 @@ export default function MessageDetail({ message, onClose }: MessageDetailProps) 
         </div>
         
         <div className="social-share-buttons">
-          <a 
-            href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap\n\nCheck out this location on Anonmap: https://anonmap.net/?lat=${message.location.lat}&lng=${message.location.lng}&zoom=18`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="social-share-button bluesky-button"
-            aria-label="Share on Bluesky"
-          >
-            <span className="social-icon">🦋</span>
-            <span>Bluesky</span>
-          </a>
-          
-          <a 
-            href={`https://www.reddit.com/submit?url=${encodeURIComponent(`https://anonmap.net/?lat=${message.location.lat}&lng=${message.location.lng}&zoom=18`)}&title=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="social-share-button reddit-button"
-            aria-label="Share on Reddit"
-          >
-            <span className="social-icon">👽</span>
-            <span>Reddit</span>
-          </a>
+          <div className="share-buttons">
+            <h3 className="share-header">Share</h3>
+            <a 
+              href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap\n\nCheck out this location on Anonmap: https://anonmap.net/?lat=${message.location.lat}&lng=${message.location.lng}&zoom=18`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-share-button bluesky-button"
+              aria-label="Share on Bluesky"
+            >
+              <img src={blueskyIcon.src} alt="Bluesky" width={20} height={20} />
+              <span>Bluesky</span>
+            </a>
+            
+            <a 
+              href={`https://www.reddit.com/submit?url=${encodeURIComponent(`https://anonmap.net/?lat=${message.location.lat}&lng=${message.location.lng}&zoom=18`)}&title=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-share-button reddit-button"
+              aria-label="Share on Reddit"
+            >
+              <img src={redditIcon.src} alt="Reddit" width={20} height={20} />
+              <span>Reddit</span>
+            </a>
+          </div>
+          <div className="navigate-buttons">
+            <h3 className="navigate-header">Navigate</h3>
+            <a 
+              href={`https://www.google.com/maps/search/?api=1&query=${message.location.lat},${message.location.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-share-button google-maps-button"
+              aria-label="Share to Google Maps"
+            >
+              <img src={googleMapsIcon.src} alt="Google Maps" width={20} height={20} />
+              <span>Google Maps</span>
+            </a>
+            
+            <a 
+              href={`https://maps.apple.com/?q=${message.location.lat},${message.location.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="social-share-button apple-maps-button"
+              aria-label="Share to Apple Maps"
+            >
+              <img src={appleMapsIcon.src} alt="Apple Maps" width={20} height={20} />
+              <span>Apple Maps</span>
+            </a>
+          </div>
         </div>
         
         <div className="message-detail-content">
           <div className="message-bubble original-message">
             <p className="message-text">{message.message}</p>
             <div className="message-timestamp">{formatTimestamp(message.timestamp)}</div>
+            <div className="time-remaining">{formatRemainingTime(hoursRemaining)}</div>
           </div>
+          <div className="message-meta">
+            <span>Opacity: {getMessageOpacity(message).toFixed(2)}</span>
+          </div>
+        </div>
+        
+        <div className="message-replies-container" ref={repliesContainerRef}>
+          <h3 className="replies-header">Replies {hasReplies ? `(${message.replies.length})` : ''}</h3>
           
-          {/* Display replies as alternating speech bubbles */}
-          {hasReplies && (
-            <div className="message-replies-container">
+          {hasReplies ? (
+            <div className="message-replies">
               {message.replies.map((reply, index) => (
                 <div 
                   key={reply.id} 
-                  className={`message-bubble reply ${index % 2 === 0 ? 'reply-right' : 'reply-left'}`}
+                  className={`message-bubble reply ${index % 2 === 0 ? 'reply-left' : 'reply-right'}`}
                 >
                   <p className="message-text">{reply.text}</p>
                   <div className="message-timestamp">{formatTimestamp(reply.timestamp)}</div>
                 </div>
               ))}
             </div>
+          ) : (
+            <p className="no-replies">No replies yet. Be the first to reply!</p>
           )}
-          
-          <div className="message-meta">
-            <span className="message-replies">
-              {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
-            </span>
-            <span className="message-expiry">
-              {formattedHours} {hoursRemaining === 1 ? 'hour' : 'hours'} remaining
-            </span>
-          </div>
-          
-          <div className="message-reply-form">
-            <h3>Add a Reply</h3>
+        </div>
+        
+        <div className="message-reply-form">
+          <h3 className="reply-form-header">Add Reply</h3>
+          <form onSubmit={handleReplySubmit}>
             <textarea
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Type your reply here..."
+              placeholder="Add your reply..."
               maxLength={250}
-              disabled={isSubmitting}
-              className={error ? 'input-error' : ''}
             />
-            <div className="character-count">
-              {replyText.length}/250
-            </div>
-            {error && <div className="error-message">{error}</div>}
-            
             <div className="message-detail-actions">
-              <Button
-                variant="secondary"
-                size="medium"
-                onClick={onClose}
-                disabled={isSubmitting}
+              <span className="char-count">{replyText.length}/250</span>
+              {error && <span className="error-message">{error}</span>}
+              {success && <span className="success-message">{success}</span>}
+              <Button 
+                disabled={isSubmitting || !replyText.trim()}
               >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                size="medium"
-                onClick={handleSubmitReply}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Reply'}
+                {isSubmitting ? 'Sending...' : 'Reply'}
               </Button>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     </div>

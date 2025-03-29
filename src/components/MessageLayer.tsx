@@ -1,12 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
 import L from 'leaflet';
-import MessageMarker from './MessageMarker';
 import { Message } from '../services/messageService';
-import { RootState } from '../redux/store';
-import { calculateDistance } from '../services/messageService';
+import { useMessages, getMessageColor, getMessageOpacity } from '../contexts/MessagesContext';
 
 interface MessageLayerProps {
   map: L.Map | null;
@@ -15,20 +12,17 @@ interface MessageLayerProps {
   onMessageClick?: (message: Message) => void;
 }
 
-// Convert Redux message format to our Message format
-const convertReduxMessage = (reduxMessage: any, center: [number, number]): Message => {
+// Convert Context message format to our Message format
+const convertContextMessage = (contextMessage: any): Message => {
   return {
-    id: reduxMessage.id,
-    header: reduxMessage.header || 'Untitled',
-    message: reduxMessage.content,
-    location: {
-      lat: reduxMessage.location[0],
-      lng: reduxMessage.location[1]
-    },
-    timestamp: new Date(reduxMessage.timestamp).getTime(),
-    expiresAt: new Date(reduxMessage.timestamp).getTime() + (24 * 60 * 60 * 1000), // 24 hours from timestamp
-    replyCount: reduxMessage.replyCount || (reduxMessage.replies ? reduxMessage.replies.length : 0),
-    replies: reduxMessage.replies || []
+    id: contextMessage.id,
+    header: contextMessage.header || 'Untitled',
+    message: contextMessage.message,
+    location: contextMessage.location,
+    timestamp: contextMessage.timestamp,
+    expiresAt: contextMessage.expiresAt,
+    replyCount: contextMessage.replyCount || (contextMessage.replies ? contextMessage.replies.length : 0),
+    replies: contextMessage.replies || []
   };
 };
 
@@ -40,15 +34,10 @@ export default function MessageLayer({
 }: MessageLayerProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   
-  // Get messages from Redux store
-  let reduxMessages: any[] = [];
-  try {
-    reduxMessages = useSelector((state: RootState) => state.messages.messages) || [];
-  } catch (error) {
-    console.log('MessageLayer - Redux not available yet:', error);
-  }
+  // Get messages from Context
+  const { getMessagesInRadius } = useMessages();
   
-  console.log('MessageLayer rendered - map exists:', !!map, 'center:', center, 'Redux messages:', reduxMessages.length);
+  console.log('MessageLayer rendered - map exists:', !!map, 'center:', center);
   
   // Fetch messages when map or center changes
   useEffect(() => {
@@ -59,65 +48,103 @@ export default function MessageLayer({
     
     console.log('MessageLayer - Fetching messages at center:', center, 'with radius:', radius);
     
-    // Get messages from Redux store within radius
-    const nearbyReduxMessages = reduxMessages
-      .filter(msg => {
-        const distance = calculateDistance(
-          center[0], center[1],
-          msg.location[0], msg.location[1]
-        );
-        return distance <= radius;
-      })
-      .map(msg => convertReduxMessage(msg, center));
+    // Get messages from Context within radius - now using async function
+    const fetchMessages = async () => {
+      try {
+        const nearbyMessages = await getMessagesInRadius(center[0], center[1], radius);
+        console.log('MessageLayer - Found messages:', nearbyMessages.length);
+        setMessages(nearbyMessages.map(msg => convertContextMessage(msg)));
+      } catch (error) {
+        console.error('Error fetching messages:', error);
+      }
+    };
     
-    console.log('MessageLayer - Found messages:', nearbyReduxMessages.length);
-    
-    setMessages(nearbyReduxMessages);
+    // Initial fetch
+    fetchMessages();
     
     // Set up interval to refresh messages (for updating opacity)
     const intervalId = setInterval(() => {
       console.log('MessageLayer - Refreshing messages (interval)');
-      
-      const updatedReduxMessages = reduxMessages
-        .filter(msg => {
-          const distance = calculateDistance(
-            center[0], center[1],
-            msg.location[0], msg.location[1]
-          );
-          return distance <= radius;
-        })
-        .map(msg => convertReduxMessage(msg, center));
-      
-      setMessages(updatedReduxMessages);
+      fetchMessages();
     }, 60000); // Refresh every minute
     
     return () => {
       console.log('MessageLayer - Cleaning up interval');
       clearInterval(intervalId);
     };
-  }, [map, center, radius, reduxMessages]);
+  }, [map, center, radius, getMessagesInRadius]);
   
   // Handle message click
   const handleMessageClick = (message: Message) => {
-    console.log('MessageLayer - Message clicked:', message.header);
+    console.log('MessageLayer - Message clicked:', message);
     if (onMessageClick) {
       onMessageClick(message);
     }
   };
   
-  // Render message markers
-  console.log('MessageLayer - Rendering', messages.length, 'message markers');
+  // Add markers to map when messages change
+  useEffect(() => {
+    if (!map) return;
+    
+    console.log('MessageLayer - Adding markers to map:', messages.length);
+    
+    // Create a layer group for all message markers
+    const markersGroup = L.layerGroup().addTo(map);
+    
+    // Add a marker for each message
+    messages.forEach(message => {
+      // Get message styling
+      const color = getMessageColor(message);
+      const opacity = getMessageOpacity(message);
+      
+      // Create custom message flag icon
+      const flagIcon = L.divIcon({
+        className: 'message-flag-icon',
+        html: `
+          <div class="message-flag" style="opacity: ${opacity};">
+            <div class="message-flag-pole"></div>
+            <div class="message-flag-content" style="background-color: ${color};">
+              <span class="message-flag-header">${message.header}</span>
+              <span class="message-flag-replies">${message.replyCount}</span>
+            </div>
+          </div>
+        `,
+        iconSize: [140, 80],
+        iconAnchor: [10, 80]
+      });
+      
+      // Create marker with the custom icon
+      const marker = L.marker([message.location.lat, message.location.lng], {
+        icon: flagIcon,
+        riseOnHover: true,
+        zIndexOffset: 1000 // Ensure message markers are above other markers
+      }).addTo(markersGroup);
+      
+      // Create popup with message content
+      const popup = L.popup({
+        className: 'message-popup',
+        offset: [15, -25]
+      }).setContent(`
+        <div class="message-popup-header">${message.header}</div>
+        <div class="message-popup-content">${message.message}</div>
+        <div class="message-popup-footer">
+          <span>${message.replyCount} ${message.replyCount === 1 ? 'reply' : 'replies'}</span>
+        </div>
+      `);
+      
+      // Bind popup to marker
+      marker.bindPopup(popup);
+      
+      // Add click handler
+      marker.on('click', () => handleMessageClick(message));
+    });
+    
+    // Cleanup function to remove markers when component unmounts or messages change
+    return () => {
+      console.log('MessageLayer - Removing markers from map');
+      map.removeLayer(markersGroup);
+    };
+  }, [map, messages, onMessageClick]);
   
-  return (
-    <>
-      {map && messages.map(message => (
-        <MessageMarker
-          key={message.id}
-          message={message}
-          map={map}
-          onClick={handleMessageClick}
-        />
-      ))}
-    </>
-  );
+  return null; // This component doesn't render anything directly
 }

@@ -11,8 +11,9 @@ A location-based anonymous messaging application that allows users to drop and d
 - **Conversation Threads**: Reply to messages and create conversations
 - **Floating Action Button (FOB)**: Easy access to app functions with a non-intrusive UI
 - **Location Management**: Manually set your location or use device geolocation
-- **Persistent Storage**: Messages are stored in Redux and persist across sessions
+- **Persistent Storage**: Messages are stored in Redis for cross-device accessibility
 - **Location Search**: Find and navigate to specific locations on the map
+- **Social Sharing**: Share message locations via Bluesky and Reddit
 
 ## Privacy First
 
@@ -27,8 +28,9 @@ Anonmap is built with privacy as a core principle:
 
 - **Frontend**: Next.js, React, TypeScript
 - **Map**: Leaflet.js with OpenStreetMap
-- **State Management**: Redux with redux-persist
-- **Styling**: CSS Modules, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Database**: Redis for message storage and geospatial queries
+- **Styling**: CSS Modules with custom styling
 - **Deployment**: Vercel (recommended)
 
 ## Getting Started
@@ -37,6 +39,7 @@ Anonmap is built with privacy as a core principle:
 
 - Node.js (v18 or later)
 - npm or yarn
+- Redis (local or remote instance)
 
 ### Installation
 
@@ -49,18 +52,18 @@ Anonmap is built with privacy as a core principle:
 2. Install dependencies:
    ```bash
    npm install
-   # or
-   yarn install
    ```
 
-3. Start the development server:
+3. Set up Redis:
+   - For local development: Install Redis and run it on the default port (6379)
+   - For production: Set the `REDIS_URL` environment variable to your Redis instance
+
+4. Start the development server:
    ```bash
    npm run dev
-   # or
-   yarn dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
 ## Usage
 
@@ -86,4 +89,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - [Leaflet.js](https://leafletjs.com/) for the interactive maps
 - [Next.js](https://nextjs.org/) for the React framework
-- [Redux](https://redux.js.org/) for state management
+- [Redis](https://redis.io/) for message storage and geospatial queries

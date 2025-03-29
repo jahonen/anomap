@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useSelector } from 'react-redux';
 import L from 'leaflet';
 import 'leaflet.heat';
-import { RootState } from '../redux/store';
+import { useMessages } from '../contexts/MessagesContext';
 
 // Define the HeatLatLngTuple type for leaflet.heat
 type HeatLatLngTuple = [number, number, number?];
@@ -40,18 +39,10 @@ interface HeatmapLayerProps {
 export default function HeatmapLayer({ map }: HeatmapLayerProps) {
   const heatLayerRef = useRef<L.HeatLayer | null>(null);
   
-  // Get messages from Redux store
-  // The Redux message format has location as an array [lat, lng]
-  const reduxMessages = useSelector((state: any) => {
-    try {
-      return state.messages?.messages || [];
-    } catch (error) {
-      console.log('HeatmapLayer - Error accessing Redux store:', error);
-      return [];
-    }
-  });
+  // Get messages from Context
+  const { messages } = useMessages();
   
-  console.log('HeatmapLayer - Redux messages count:', reduxMessages?.length || 0);
+  console.log('HeatmapLayer - Messages count:', messages?.length || 0);
   
   useEffect(() => {
     if (!map) {
@@ -70,7 +61,7 @@ export default function HeatmapLayer({ map }: HeatmapLayerProps) {
       heatLayerRef.current = null;
     }
     
-    if (!reduxMessages || !Array.isArray(reduxMessages) || reduxMessages.length === 0) {
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
       console.log('HeatmapLayer - No messages to display');
       return;
     }
@@ -79,90 +70,73 @@ export default function HeatmapLayer({ map }: HeatmapLayerProps) {
     const heatPoints: HeatLatLngTuple[] = [];
     
     // Log the first message to understand its structure
-    if (reduxMessages.length > 0) {
-      console.log('HeatmapLayer - Sample message structure:', JSON.stringify(reduxMessages[0]));
+    if (messages.length > 0) {
+      console.log('HeatmapLayer - Sample message structure:', JSON.stringify(messages[0]));
     }
     
-    // Safely process each message
-    reduxMessages.forEach((msg: any) => {
+    // Process each message
+    messages.forEach((msg) => {
       try {
-        // Handle both possible location formats in Redux:
-        // 1. location as an array [lat, lng]
-        // 2. location as an object {lat, lng}
-        let lat: number, lng: number;
+        const lat = msg.location.lat;
+        const lng = msg.location.lng;
         
-        if (Array.isArray(msg.location)) {
-          // Format: location: [lat, lng]
-          [lat, lng] = msg.location;
-        } else if (msg.location && typeof msg.location === 'object') {
-          // Format: location: {lat, lng}
-          lat = msg.location.lat;
-          lng = msg.location.lng;
+        // Validate coordinates
+        if (typeof lat === 'number' && !isNaN(lat) && 
+            typeof lng === 'number' && !isNaN(lng)) {
+          
+          // Calculate intensity based on reply count (0.5 to 1.0)
+          const intensity = Math.min(1.0, 0.5 + (msg.replyCount * 0.1));
+          
+          heatPoints.push([lat, lng, intensity]);
         } else {
-          console.log('HeatmapLayer - Skipping message with invalid location format:', msg.id);
-          return;
+          console.log('HeatmapLayer - Invalid coordinates in message:', msg.id);
         }
-        
-        // Skip if lat/lng are not valid numbers
-        if (isNaN(lat) || isNaN(lng)) {
-          console.log('HeatmapLayer - Skipping message with invalid coordinates:', msg.id);
-          return;
-        }
-        
-        // Calculate intensity based on reply count (more replies = higher intensity)
-        let replyCount = 0;
-        
-        if (Array.isArray(msg.replies)) {
-          replyCount = msg.replies.length;
-        } else if (typeof msg.replyCount === 'number') {
-          replyCount = msg.replyCount;
-        }
-        
-        // Intensity should be at least 1 (for the message itself) plus replies
-        const intensity = replyCount + 1;
-        
-        console.log(`HeatmapLayer - Adding point at [${lat}, ${lng}] with intensity ${intensity}`);
-        heatPoints.push([lat, lng, intensity]);
       } catch (error) {
         console.log('HeatmapLayer - Error processing message:', error);
       }
     });
     
-    console.log('HeatmapLayer - Creating heatmap with points:', heatPoints.length);
+    console.log('HeatmapLayer - Created heat points:', heatPoints.length);
     
-    if (heatPoints.length === 0) {
-      console.log('HeatmapLayer - No valid points to display');
-      return;
+    if (heatPoints.length > 0) {
+      // Create heatmap layer with custom gradient
+      try {
+        // @ts-ignore - Using type assertion to bypass type checking for the gradient option
+        const heatLayer = L.heatLayer(heatPoints, {
+          radius: 25,
+          blur: 15,
+          maxZoom: 17,
+          max: 1.0,
+          gradient: {
+            0.4: 'blue',
+            0.6: 'lime',
+            0.8: 'yellow',
+            1.0: 'red'
+          }
+        } as any).addTo(map);
+        
+        // @ts-ignore - Assign the layer with type assertion
+        heatLayerRef.current = heatLayer as L.HeatLayer;
+        console.log('HeatmapLayer - Heatmap created successfully');
+      } catch (error) {
+        console.error('HeatmapLayer - Error creating heatmap:', error);
+      }
     }
     
-    try {
-      // Create and add heatmap layer with more visible settings
-      // @ts-ignore
-      heatLayerRef.current = L.heatLayer(heatPoints, {
-        radius: 30,       // Increased from 25 to 30
-        blur: 20,         // Increased from 15 to 20
-        maxZoom: 18,      // Increased from 17 to 18
-        max: 8,           // Decreased from 10 to 8 (makes lower values more visible)
-        minOpacity: 0.5,  // Added minimum opacity to ensure visibility
-        gradient: { 0.4: 'blue', 0.65: 'lime', 0.9: 'yellow', 1: 'red' }
-      }).addTo(map);
-      
-      console.log('HeatmapLayer - Heatmap created successfully');
-    } catch (error) {
-      console.error('HeatmapLayer - Error creating heatmap:', error);
-    }
-    
+    // Cleanup function
     return () => {
-      if (heatLayerRef.current && map) {
+      if (heatLayerRef.current) {
         try {
           // @ts-ignore
           map.removeLayer(heatLayerRef.current);
+          console.log('HeatmapLayer - Removed on cleanup');
         } catch (error) {
-          console.error('HeatmapLayer - Error removing layer:', error);
+          console.log('HeatmapLayer - Error removing layer on cleanup:', error);
         }
+        heatLayerRef.current = null;
       }
     };
-  }, [map, reduxMessages]);
+  }, [map, messages]);
   
   return null; // This component doesn't render anything directly
 }
