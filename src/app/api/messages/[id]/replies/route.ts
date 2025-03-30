@@ -1,13 +1,9 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 // Temporarily commented out Redis import as addReply is not yet implemented
 // import { addReply, getMessageById } from '../../../../../services/redisMessageService';
 
-interface Params {
-  id: string;
-}
-
 // POST /api/messages/[id]/replies
-export async function POST(request: NextRequest, context: { params: Params }) {
+export async function POST(request, context) {
   try {
     const { id: messageId } = context.params;
 

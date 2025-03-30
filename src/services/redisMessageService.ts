@@ -323,3 +323,72 @@ export function getMessageOpacity(message: Message): number {
   if (ageHours > maxAgeHours) return 0.3;
   return Math.max(0.3, 1 - (ageHours / maxAgeHours));
 }
+
+// Delete message by ID
+export async function removeMessage(messageId: string): Promise<boolean> {
+  // Implementation of the message deletion logic
+  console.log(`RedisMessageService - Removing message with ID: ${messageId}`);
+  
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    console.error(`RedisMessageService - Missing Redis credentials for removeMessage`);
+    return false;
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+
+  try {
+    // 1. Get message to extract location for GEOREM
+    const message = await getMessageById(messageId);
+    if (!message) {
+      console.warn(`RedisMessageService - Message ${messageId} not found for deletion`);
+      return false;
+    }
+
+    // 2. Remove message from geo index using ZREM
+    const locationRemoveResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(["ZREM", LOCATION_KEY, messageId])
+    });
+
+    if (!locationRemoveResponse.ok) {
+      const errorData = await locationRemoveResponse.json();
+      console.error(`RedisMessageService - Error removing message ${messageId} from geo index:`, errorData);
+      // Continue with deletion even if geo index removal fails
+    }
+
+    // 3. Delete message hash using DEL
+    const deleteResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(["DEL", messageId])
+    });
+
+    if (!deleteResponse.ok) {
+      const errorData = await deleteResponse.json();
+      console.error(`RedisMessageService - Error deleting message ${messageId}:`, errorData);
+      return false;
+    }
+
+    const deleteResult = await deleteResponse.json();
+    if (deleteResult.result === 1) {
+      console.log(`RedisMessageService - Successfully deleted message ${messageId}`);
+      return true;
+    } else {
+      console.warn(`RedisMessageService - Message ${messageId} not found or already deleted`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`RedisMessageService - Error deleting message ${messageId}:`, error);
+    return false;
+  }
+}
+
+// Alias for removeMessage to maintain compatibility
+export const deleteMessage = removeMessage;

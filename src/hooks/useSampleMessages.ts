@@ -82,8 +82,8 @@ export function useSampleMessages(centerLat: number, centerLng: number) {
           const content = contents[contentIndex];
           
           try {
-            // Add the message
-            const message = await addMessage(header, content, lat, lng);
+            // Add the message with location as a single object
+            const message = await addMessage(header, content, { lat, lng });
             
             if (message) {
               // Add random number of replies (0-5)

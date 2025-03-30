@@ -50,11 +50,11 @@ export const isMessageInBounds = (message: Message, bounds: L.LatLngBounds): boo
     if (Array.isArray(message.location) && message.location.length >= 2) {
       lat = message.location[0];
       lng = message.location[1];
-    } else if (message.location && typeof message.location === 'object' && message.location.lat !== undefined && message.location.lng !== undefined) {
-       // Ensure it's the expected object structure before accessing
+    } else if (message.location && typeof message.location === 'object') {
+      // Use type guard to check if it's the object format
       if ('lat' in message.location && 'lng' in message.location) {
-         lat = message.location.lat;
-         lng = message.location.lng;
+        lat = message.location.lat;
+        lng = message.location.lng;
       }
     }
 
