@@ -4,7 +4,7 @@
 export interface Message {
   id: string;
   header: string;
-  message: string;
+  content: string;
   location: {
     lat: number;
     lng: number;
@@ -21,217 +21,133 @@ export interface Message {
 
 // In-memory storage
 let messages: Message[] = [];
+let isInitialized = false;
+const RADIUS_OF_EARTH_KM = 6371;
 
-// Default message lifetime in hours
-const DEFAULT_MESSAGE_LIFETIME_HOURS = 24;
-
-// Check if a header is unique within 3km radius
-export function isHeaderUnique(header: string, lat: number, lng: number): boolean {
-  // Calculate a 3km radius around the given coordinates
-  const nearbyMessages = messages.filter(msg => {
-    const distance = calculateDistance(
-      lat, lng,
-      msg.location.lat, msg.location.lng
-    );
-    return distance <= 3; // 3 kilometers
-  });
-  
-  return !nearbyMessages.some(msg => msg.header.toLowerCase() === header.toLowerCase());
+function degreesToRadians(degrees: number): number {
+  return degrees * Math.PI / 180;
 }
 
-// Add a new message
-export function addMessage(header: string, message: string, lat: number, lng: number): Message {
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLat = degreesToRadians(lat2 - lat1);
+  const dLon = degreesToRadians(lon2 - lon1);
+
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(degreesToRadians(lat1)) * Math.cos(degreesToRadians(lat2)) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return RADIUS_OF_EARTH_KM * c; // Distance in kilometers
+}
+
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 9);
+}
+
+export function addMessage(header: string, content: string, lat: number, lng: number, durationHours: number = 24): Message {
   const now = Date.now();
-  const expiresAt = now + (DEFAULT_MESSAGE_LIFETIME_HOURS * 60 * 60 * 1000); // 24 hours from now
-  
+  const expiresAt = now + durationHours * 60 * 60 * 1000;
   const newMessage: Message = {
     id: generateId(),
     header,
-    message,
+    content,
     location: { lat, lng },
     timestamp: now,
     expiresAt,
     replyCount: 0,
-    replies: []
+    replies: [],
   };
-  
   messages.push(newMessage);
+  console.log("Message added:", newMessage);
   return newMessage;
 }
 
-// Add a reply to a message
-export function addReply(messageId: string, replyText: string): boolean {
-  const messageIndex = messages.findIndex(msg => msg.id === messageId);
-  if (messageIndex === -1) return false;
-  
-  // Increment reply count
-  messages[messageIndex].replyCount += 1;
-  
-  // Add the reply
-  messages[messageIndex].replies.push({
-    id: generateId(),
-    text: replyText,
-    timestamp: Date.now()
-  });
-  
-  // Extend expiration time by 6 hours with each reply, up to a maximum of 7 days
-  const MAX_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-  const EXTENSION_PER_REPLY_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-  
-  const currentExpiry = messages[messageIndex].expiresAt;
-  const newExpiry = Math.min(
-    currentExpiry + EXTENSION_PER_REPLY_MS,
-    messages[messageIndex].timestamp + MAX_LIFETIME_MS
-  );
-  
-  messages[messageIndex].expiresAt = newExpiry;
-  
-  return true;
+export function getMessageById(id: string): Message | undefined {
+  return messages.find(msg => msg.id === id);
 }
 
-// Get messages within a certain radius (in km)
-export function getMessagesInRadius(lat: number, lng: number, radius: number = 3): Message[] {
-  console.log(`getMessagesInRadius called with [${lat}, ${lng}], radius: ${radius}, total messages: ${messages.length}`);
-  
-  // Filter out expired messages
+export function getMessagesInRadius(lat: number, lon: number, radiusKm: number): Message[] {
   const now = Date.now();
-  const activeMessages = messages.filter(msg => msg.expiresAt > now);
+  // Filter out expired messages first
+  messages = messages.filter(msg => msg.expiresAt > now);
+
+  console.log(`Filtering ${messages.length} messages for radius ${radiusKm}km around [${lat}, ${lon}]`);
   
-  console.log(`Active (non-expired) messages: ${activeMessages.length}`);
-  
-  // Update messages array to remove expired messages
-  if (activeMessages.length !== messages.length) {
-    messages = activeMessages;
+  return messages.filter(msg => {
+    const distance = calculateDistance(lat, lon, msg.location.lat, msg.location.lng);
+    return distance <= radiusKm;
+  });
+}
+
+export function addReply(messageId: string, text: string): Message | undefined {
+  const message = getMessageById(messageId);
+  if (message) {
+    const newReply = {
+      id: generateId(),
+      text,
+      timestamp: Date.now(),
+    };
+    message.replies.push(newReply);
+    message.replyCount = message.replies.length;
+    return message;
   }
-  
-  const nearbyMessages = activeMessages.filter(msg => {
-    const distance = calculateDistance(
-      lat, lng,
-      msg.location.lat, msg.location.lng
-    );
-    console.log(`Message "${msg.header}" distance: ${distance}km, within radius: ${distance <= radius}`);
-    return distance <= radius;
-  });
-  
-  console.log(`Found ${nearbyMessages.length} messages within ${radius}km of [${lat}, ${lng}]`);
-  
-  return nearbyMessages;
+  return undefined;
 }
 
-// Get a single message by ID
-export function getMessageById(id: string): Message | null {
-  return messages.find(msg => msg.id === id) || null;
-}
+// --- Sample Data Generation --- 
 
-// Calculate hours remaining until message expiration
-export function getHoursRemaining(message: Message): number {
-  const now = Date.now();
-  const hoursRemaining = (message.expiresAt - now) / (60 * 60 * 1000);
-  return Math.max(0, hoursRemaining);
-}
+const sampleMessages = [
+  { header: "Free Coffee Downtown", content: "Grab a free coffee at Central Perk today only!" },
+  { header: "Park Cleanup Event", content: "Join us this Saturday at 10 AM for a park cleanup." },
+  { header: "Live Music Tonight", content: "Acoustic set at The Blue Note starting 8 PM." },
+  { header: "Lost Dog: Fido", content: "Golden Retriever, answers to Fido, lost near Elm Street." },
+  { header: "Garage Sale!", content: "Multi-family garage sale on Oak Ave, 9 AM - 3 PM." },
+  { header: "Road Closure Alert", content: "Main Street closed between 1st and 3rd Ave due to construction." },
+  { header: "Farmers Market Open", content: "Fresh produce available at the town square until 2 PM." },
+  { header: "Movie in the Park", content: "Showing 'The Great Outdoors' tonight at dusk, bring blankets!" },
+  { header: "Book Club Meeting", content: "Discussing 'The Midnight Library' at the library, 7 PM." },
+  { header: "Food Truck Festival", content: "Various food trucks at the waterfront all weekend." },
+  { header: "Art Walk Event", content: "Local galleries open late tonight, 6 PM - 9 PM." },
+  { header: "Charity Run Sign-up", content: "Sign up for the 5k run next Sunday to support local charities." },
+  { header: "New Restaurant Opening", content: "'The Tasty Spoon' opens its doors tomorrow on Pine Street." },
+  { header: "Tech Meetup", content: "Discussing the latest in AI at the community center, 7:30 PM." },
+  { header: "Public Library Notice", content: "The library will be closed for renovations next week." }
+];
 
-// Get opacity based on hours remaining
-export function getMessageOpacity(message: Message): number {
-  const hoursRemaining = getHoursRemaining(message);
-  
-  if (hoursRemaining <= 1) return 0.5;
-  if (hoursRemaining <= 2) return 0.6;
-  if (hoursRemaining <= 3) return 0.7;
-  if (hoursRemaining <= 4) return 0.8;
-  if (hoursRemaining <= 5) return 0.9;
-  return 1.0; // 6 hours or more
-}
+function initializeSampleData() {
+  if (isInitialized || process.env.NODE_ENV !== 'development') return;
 
-// Get color based on reply count (more replies = more red)
-export function getMessageColor(message: Message): string {
-  const { replyCount } = message;
-  
-  // Create a smooth gradient from blue to red
-  // 0 replies = blue (#3366cc)
-  // 20+ replies = red (#cc3366)
-  
-  // Cap at 20 replies for color calculation
-  const normalizedCount = Math.min(replyCount, 20);
-  
-  // Calculate the percentage (0 to 1)
-  const percentage = normalizedCount / 20;
-  
-  // Calculate RGB components
-  const r = Math.round(51 + (204 - 51) * percentage);  // 51 (33 hex) to 204 (cc hex)
-  const g = Math.round(102 - 51 * percentage);         // 102 (66 hex) to 51 (33 hex)
-  const b = Math.round(204 - 153 * percentage);        // 204 (cc hex) to 51 (33 hex)
-  
-  // Return the color in hex format
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
+  console.log("Initializing sample message data...");
+  messages = []; // Clear existing messages
 
-// Helper function to calculate distance between two points using Haversine formula
-export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Radius of the earth in km
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  const distance = R * c; // Distance in km
-  return distance;
-}
+  // Coordinates roughly around a sample city area (e.g., San Francisco)
+  const centerLat = 37.7749;
+  const centerLng = -122.4194;
+  const spread = 0.05; // Approx 5km spread
 
-function deg2rad(deg: number): number {
-  return deg * (Math.PI/180);
-}
+  for (let i = 0; i < 15; i++) {
+    const sample = sampleMessages[i % sampleMessages.length];
+    const lat = centerLat + (Math.random() - 0.5) * spread * 2;
+    const lng = centerLng + (Math.random() - 0.5) * spread * 2;
+    const now = Date.now();
+    const expiresAt = now + (1 + Math.random() * 72) * 60 * 60 * 1000; // Expires in 1-73 hours
 
-// Generate a unique ID
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
-}
-
-// Add some sample messages for testing
-export function addSampleMessages(centerLat: number, centerLng: number): void {
-  console.log('Adding sample messages around:', centerLat, centerLng);
-  
-  // Always clear existing messages and create new ones at the current location
-  messages = [];
-  
-  const samples = [
-    { header: "Coffee Shop", message: "Anyone know a good coffee shop around here?", replyCount: 2, hoursLeft: 8 },
-    { header: "Dog Park", message: "Looking for a dog park in this area. Any suggestions?", replyCount: 5, hoursLeft: 4 },
-    { header: "Street Art", message: "Check out the amazing street art on the corner!", replyCount: 12, hoursLeft: 2 },
-    { header: "Traffic Jam", message: "Avoid Main Street, there's a huge traffic jam.", replyCount: 18, hoursLeft: 1 },
-    { header: "Free Food", message: "Free food samples at the new grocery store!", replyCount: 25, hoursLeft: 6 }
-  ];
-  
-  const now = Date.now();
-  
-  samples.forEach((sample, index) => {
-    // Create points in roughly different directions from the center
-    const angle = (index / samples.length) * 2 * Math.PI;
-    const distance = 0.5 + (Math.random() * 1.5); // 0.5 to 2 km away
-    
-    // Calculate new coordinates (approximate)
-    // Use appropriate multipliers to ensure messages appear within visible radius
-    // 0.01 is approximately 1km at the equator
-    const lat = centerLat + (Math.sin(angle) * distance * 0.01);
-    const lng = centerLng + (Math.cos(angle) * distance * 0.01);
-    
-    console.log(`Creating sample message "${sample.header}" at [${lat}, ${lng}], ${distance}km from center`);
-    
-    const expiresAt = now + (sample.hoursLeft * 60 * 60 * 1000);
-    
     messages.push({
       id: generateId(),
       header: sample.header,
-      message: sample.message,
+      content: sample.content,
       location: { lat, lng },
       timestamp: now - (Math.random() * 12 * 60 * 60 * 1000), // Random time in the last 12 hours
       expiresAt,
-      replyCount: sample.replyCount,
-      replies: []
+      replyCount: Math.floor(Math.random() * 5), // 0-4 replies
+      replies: [], // Sample replies could be added here
     });
-  });
-  
-  console.log('Added sample messages, total count:', messages.length);
+  }
+
+  isInitialized = true;
+  console.log("Sample data initialization complete.");
 }
+
+// Initialize sample data on first import in development
+initializeSampleData();

@@ -1,54 +1,93 @@
-import { NextResponse } from 'next/server';
-import { addReply, getMessageById } from '../../../../../services/redisMessageService';
+import { NextResponse, NextRequest } from 'next/server';
+// Temporarily commented out Redis import as addReply is not yet implemented
+// import { addReply, getMessageById } from '../../../../../services/redisMessageService';
+
+interface Params {
+  id: string;
+}
 
 // POST /api/messages/[id]/replies
-export async function POST(request, { params }) {
+export async function POST(request: NextRequest, context: { params: Params }) {
   try {
-    const { id } = params;
-    
+    const { id: messageId } = context.params;
+
+    /* // --- Temporarily disabled Redis interaction --- 
     // Check if message exists
-    const message = await getMessageById(id);
+    const message = await getMessageById(messageId);
     if (!message) {
       return NextResponse.json(
         { error: 'Message not found' },
         { status: 404 }
       );
     }
-    
-    // Parse request body
+    */
+
     const body = await request.json();
-    const { text } = body;
-    
-    // Validate required fields
-    if (!text) {
-      return NextResponse.json(
-        { error: 'Missing required field: text' },
-        { status: 400 }
-      );
+    const { text } = body; // Changed from 'content' to 'text' to match frontend
+
+    console.log(`API: Received POST request to add reply to message ${messageId}`);
+    console.log("API: Reply text:", text);
+
+    if (!text || !messageId) {
+      console.error("API: Missing text or messageId for reply.");
+      return NextResponse.json({ error: 'Missing text or messageId' }, { status: 400 });
     }
-    
+
+    /* // --- Temporarily disabled Redis interaction --- 
     // Add reply
-    const reply = await addReply(id, text);
-    
+    const reply = await addReply(messageId, content);
+
     if (!reply) {
       return NextResponse.json(
-        { error: 'Failed to add reply' },
+        { error: 'Failed to add reply via Redis' }, // More specific error
         { status: 500 }
       );
     }
-    
-    // Get updated message
-    const updatedMessage = await getMessageById(id);
-    
+
+    // Get updated message - This might be redundant if addReply returns the necessary info
+    // const updatedMessage = await getMessageById(messageId);
+    */
+
+    // Simulate successful reply creation for now
+    const newReply = {
+      id: `reply:${Date.now()}:${Math.random().toString(36).substring(2, 8)}`, // Simulate a new ID
+      messageId: messageId,
+      content: text, // Store as 'content' internally
+      timestamp: Date.now(), // Use numeric timestamp to fix date issues
+      author: "User" // Placeholder
+    };
+
+    console.log("API: Simulated reply creation:", newReply);
+
+    // Return both the reply and a simulated updated message with the reply included
+    const updatedMessage = {
+      id: messageId,
+      header: "Message Header", // Placeholder
+      content: "Message Content", // Placeholder
+      timestamp: Date.now(), // Use numeric timestamp
+      location: { lat: 0, lng: 0 }, // Placeholder
+      replies: [newReply] // Include the new reply
+    };
+
+    // Return the simulated data with 201 status
     return NextResponse.json({
       message: updatedMessage,
-      reply
+      reply: newReply
     }, { status: 201 });
+
+    /* // --- Original return based on Redis --- 
+    return NextResponse.json({
+      message: updatedMessage, // Or maybe just return the reply?
+      reply: reply,
+    }, { status: 201 });
+    */
+
   } catch (error) {
-    console.error('Error adding reply:', error);
-    return NextResponse.json(
-      { error: 'Failed to add reply' },
-      { status: 500 }
-    );
+    console.error('API Error: POST /api/messages/[id]/replies:', error);
+    // Check if it's a JSON parsing error
+    if (error instanceof SyntaxError) {
+        return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

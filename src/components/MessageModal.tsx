@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useMessages, calculateDistance } from '../contexts/MessagesContext';
+import { useMessages } from '../contexts/MessagesContext';
+import { calculateDistance } from '../utils/distance.js';
 
 interface MessageModalProps {
   onClose: () => void;
@@ -33,9 +34,26 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
     
     // Check if header is unique in 3km radius using Context
     const isHeaderUnique = !messages.some(msg => {
+      // Extract lat/lng, handling both array and object formats
+      let lat: number;
+      let lng: number;
+      if (Array.isArray(msg.location)) {
+        lat = msg.location[0];
+        lng = msg.location[1];
+      } else {
+        lat = msg.location.lat;
+        lng = msg.location.lng;
+      }
+
+      // Validate coordinates before calculating distance
+      if (typeof lat !== 'number' || isNaN(lat) || typeof lng !== 'number' || isNaN(lng)) {
+          console.warn('MessageModal - Invalid location for message during uniqueness check:', msg.id, msg.location);
+          return false; // Skip this message if location is invalid
+      }
+
       const distance = calculateDistance(
         coordinates[0], coordinates[1],
-        msg.location.lat, msg.location.lng
+        lat, lng // Use extracted coordinates
       );
       return distance <= 3 && msg.header && msg.header.toLowerCase() === value.toLowerCase();
     });
@@ -81,7 +99,8 @@ export default function MessageModal({ onClose, onSubmit, coordinates }: Message
     
     try {
       // Add message using Context - now async
-      const newMessage = await addMessage(header, message, coordinates[0], coordinates[1]);
+      // Pass coordinates array directly as the third argument
+      const newMessage = await addMessage(header, message, coordinates); 
       console.log('MessageModal - Message added using Context:', newMessage);
       
       // Call onSubmit with success

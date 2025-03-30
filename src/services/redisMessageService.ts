@@ -1,170 +1,325 @@
-import { getRedisClient } from './redisClient';
-import { v4 as uuidv4 } from 'uuid';
-import { Message, Reply } from '../contexts/MessagesContext';
+import { Redis } from '@upstash/redis';
+import { Message, Reply } from '../utils/types'; 
 
-// Redis key prefixes
-const MESSAGE_PREFIX = 'message:';
-const GEO_KEY = 'message_locations';
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || '',
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
+});
 
-// Default message lifetime in seconds (24 hours)
-const DEFAULT_MESSAGE_LIFETIME = 24 * 60 * 60;
+const LOCATION_KEY = 'messageLocations'; 
 
-// Add a message to Redis
-export async function addMessage(header: string, content: string, lat: number, lng: number): Promise<Message> {
-  const redis = getRedisClient();
-  
-  // Create a new message object
-  const messageId = uuidv4();
-  const now = Date.now();
-  const expiresAt = now + (DEFAULT_MESSAGE_LIFETIME * 1000);
-  
-  const message: Message = {
-    id: messageId,
-    header,
-    message: content,
-    location: {
-      lat,
-      lng
-    },
-    timestamp: now,
-    expiresAt,
-    replyCount: 0,
-    replies: []
-  };
-  
-  // Store the message in Redis
-  await redis.set(
-    `${MESSAGE_PREFIX}${messageId}`, 
-    JSON.stringify(message),
-    'EX',
-    DEFAULT_MESSAGE_LIFETIME
-  );
-  
-  // Add the message location to the geo index
-  await redis.geoadd(
-    GEO_KEY,
-    lng,  // Note: Redis GEO commands expect longitude first, then latitude
-    lat,
-    messageId
-  );
-  
-  return message;
-}
+// Fetch messages within a radius
+// NOTE: Current implementation fetches ALL messages and relies on client-side filtering (if any).
+// Proper geo-filtering needs to be re-implemented if required.
+export async function getMessagesInRadius(lat: number, lon: number, radiusKm: number): Promise<Message[]> {
+  console.log(`RedisMessageService - Fetching message IDs near [${lat}, ${lon}] within ${radiusKm}km`);
+  try {
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      console.error('RedisMessageService - Missing Redis credentials in environment variables');
+      return [];
+    }
+    
+    const url = `${process.env.UPSTASH_REDIS_REST_URL}`;
+    const headers = {
+      Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN}`,
+      "Content-Type": "application/json",
+    };
 
-// Get a message by ID
-export async function getMessageById(id: string): Promise<Message | null> {
-  const redis = getRedisClient();
-  
-  const messageData = await redis.get(`${MESSAGE_PREFIX}${id}`);
-  if (!messageData) return null;
-  
-  return JSON.parse(messageData) as Message;
-}
+    console.log(
+      `RedisMessageService - Fetching message IDs near [${lat}, ${lon}] within ${radiusKm}km using GEORADIUS`
+    );
 
-// Get messages within a radius of a location
-export async function getMessagesInRadius(lat: number, lng: number, radius: number = 3): Promise<Message[]> {
-  const redis = getRedisClient();
-  
-  // Convert radius from km to meters
-  const radiusMeters = radius * 1000;
-  
-  // Find message IDs within the radius
-  const geoResults = await redis.georadius(
-    GEO_KEY,
-    lng,  // Note: Redis GEO commands expect longitude first, then latitude
-    lat,
-    radiusMeters,
-    'm'
-  );
-  
-  if (!geoResults || geoResults.length === 0) {
+    let messageIds: string[] = [];
+    try {
+      // Use GEORADIUS via fetch to find message IDs within the specified radius
+      const radiusMeters = radiusKm * 1000;
+      const georadiusResponse = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify([
+          "GEORADIUS",
+          LOCATION_KEY,
+          lon.toString(),
+          lat.toString(),
+          radiusMeters.toString(),
+          "m", // Specify radius unit as meters
+          // Add any other options if needed, e.g., WITHDIST
+        ]),
+      });
+
+      if (!georadiusResponse.ok) {
+        const errorText = await georadiusResponse.text();
+        console.error(
+          `Redis GEORADIUS command failed: ${georadiusResponse.status} ${georadiusResponse.statusText}`, errorText
+        );
+        throw new Error('Failed to fetch message IDs from Redis via GEORADIUS');
+      }
+
+      const georadiusResult = await georadiusResponse.json();
+
+      if (georadiusResult.error) {
+        console.error("Redis GEORADIUS error:", georadiusResult.error);
+        throw new Error(`Redis GEORADIUS error: ${georadiusResult.error}`);
+      }
+
+      // The result of GEORADIUS is an array of member names (our message IDs)
+      messageIds = georadiusResult.result || [];
+      console.log(
+        `RedisMessageService - Found ${messageIds.length} message IDs within radius via GEORADIUS.`
+      );
+
+    } catch (error) {
+      console.error("Error fetching message IDs from Redis via GEORADIUS:", error);
+      // Depending on requirements, you might want to return empty array or re-throw
+      return [];
+    }
+
+    // Fetch full message details for each ID found
+    if (messageIds.length === 0) {
+      return [];
+    }
+
+    console.log(
+      `RedisMessageService - Getting details for ${messageIds.length} messages.`
+    );
+    try {
+      const messagePromises = messageIds.map((id) => getMessageById(id)); // Use the existing getMessageById
+      const messages = await Promise.all(messagePromises);
+
+      // Filter out any null results (e.g., if a message hash was missing or incomplete)
+      const validMessages = messages.filter((msg): msg is Message => msg !== null);
+      console.log(
+        `RedisMessageService - Retrieved details for ${validMessages.length} valid messages.`
+      );
+      return validMessages;
+    } catch (error) {
+      console.error("Error fetching message details:", error);
+      return []; // Return empty array on error fetching details
+    }
+
+  } catch (redisError) {
+    console.error('RedisMessageService - Redis command error:', redisError);
+    
+    // If we get a specific error about command not existing, try an alternative
+    if (redisError instanceof Error && redisError.message.includes('not found')) {
+      console.log('RedisMessageService - Trying alternative approach...');
+      
+      // Try a different command or approach here
+      // For now, just return empty array
+      return [];
+    }
+    
+    // Otherwise, just return empty array
     return [];
   }
-  
-  // Fetch all messages in parallel
-  const messagePromises = geoResults.map(id => redis.get(`${MESSAGE_PREFIX}${id}`));
-  const messageDataArray = await Promise.all(messagePromises);
-  
-  // Filter out any null results and parse the JSON
-  return messageDataArray
-    .filter(data => data !== null)
-    .map(data => JSON.parse(data as string) as Message);
 }
 
-// Add a reply to a message
-export async function addReply(messageId: string, text: string): Promise<Reply | null> {
-  const redis = getRedisClient();
+// Add or update a message
+export async function addOrUpdateMessage(message: Message): Promise<string> {
+  console.log("RedisMessageService - Adding/Updating message:", message);
   
-  // Get the existing message
-  const messageData = await redis.get(`${MESSAGE_PREFIX}${messageId}`);
-  if (!messageData) return null;
+  // Use provided ID or generate one
+  const messageId = message.id || `message:${Date.now()}:${Math.random().toString(36).substring(2, 9)}`;
   
-  const message = JSON.parse(messageData) as Message;
-  
-  // Create a new reply
-  const reply: Reply = {
-    id: uuidv4(),
-    text,
-    timestamp: Date.now()
-  };
-  
-  // Add the reply to the message
-  message.replies.push(reply);
-  message.replyCount = message.replies.length;
-  
-  // Update the message in Redis
-  // Note: We maintain the original expiration by using the remaining TTL
-  const ttl = await redis.ttl(`${MESSAGE_PREFIX}${messageId}`);
-  
-  if (ttl > 0) {
-    await redis.set(
-      `${MESSAGE_PREFIX}${messageId}`,
-      JSON.stringify(message),
-      'EX',
-      ttl
-    );
+  // Ensure location is in { lat, lng } format 
+  let latitude: number;
+  let longitude: number;
+  if (Array.isArray(message.location)) {
+    latitude = message.location[0];
+    longitude = message.location[1];
   } else {
-    // If TTL is -1 (no expiration) or -2 (key doesn't exist), use default lifetime
-    await redis.set(
-      `${MESSAGE_PREFIX}${messageId}`,
-      JSON.stringify(message),
-      'EX',
-      DEFAULT_MESSAGE_LIFETIME
-    );
+    latitude = message.location.lat;
+    longitude = message.location.lng;
   }
-  
-  return reply;
-}
 
-// Delete a message
-export async function deleteMessage(messageId: string): Promise<boolean> {
-  const redis = getRedisClient();
-  
-  // Remove the message from Redis
-  const deleted = await redis.del(`${MESSAGE_PREFIX}${messageId}`);
-  
-  // Remove the message from the geo index
-  await redis.zrem(GEO_KEY, messageId);
-  
-  return deleted > 0;
-}
+  if (typeof latitude !== 'number' || isNaN(latitude) || typeof longitude !== 'number' || isNaN(longitude)) {
+    console.error('RedisMessageService - Invalid location provided for addOrUpdateMessage:', message.location);
+    throw new Error('Invalid location data provided for message.');
+  }
 
-// Delete expired messages (this could be run periodically)
-export async function deleteExpiredMessages(): Promise<number> {
-  const redis = getRedisClient();
-  
-  // Redis automatically removes expired keys, but we need to clean up the geo index
-  // This is a simplified approach - in production, you might want a more efficient solution
-  const allMessageIds = await redis.zrange(GEO_KEY, 0, -1);
-  let removedCount = 0;
-  
-  for (const id of allMessageIds) {
-    const exists = await redis.exists(`${MESSAGE_PREFIX}${id}`);
-    if (exists === 0) {
-      await redis.zrem(GEO_KEY, id);
-      removedCount++;
+  // Convert timestamp ISO string back to number for storage
+  const timestampMs = new Date(message.timestamp).getTime();
+  if (isNaN(timestampMs)) {
+     console.error('RedisMessageService - Invalid timestamp provided for addOrUpdateMessage:', message.timestamp);
+     throw new Error('Invalid timestamp provided for message.');
+  }
+
+  // Base URL and headers for Upstash REST API
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    console.error('RedisMessageService - Missing Redis credentials in environment variables for addOrUpdateMessage');
+    throw new Error('Missing Redis credentials.');
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+
+  try {
+    // 1. Store message details using HMSET
+    const messageData = {
+      id: messageId,
+      header: message.header || '', 
+      content: message.content, 
+      lat: latitude.toString(),
+      lon: longitude.toString(),
+      timestamp: timestampMs.toString(), 
+      burnRate: (message.burnRate ?? 0).toString(), 
+      replies: JSON.stringify(message.replies || []) 
+    };
+    // HMSET command requires key followed by field-value pairs
+    const hmsetArgs = [messageId, ...Object.entries(messageData).flat()];
+    const hmsetResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(["HMSET", ...hmsetArgs])
+    });
+    if (!hmsetResponse.ok) {
+      const errorData = await hmsetResponse.json();
+      console.error(`RedisMessageService - Error executing HMSET for ${messageId}:`, errorData);
+      throw new Error(`Failed to store message details: ${errorData.error}`);
+    }
+    const hmsetData = await hmsetResponse.json();
+    console.log(`RedisMessageService - HMSET result for ${messageId}:`, hmsetData.result);
+
+
+    // 2. Add location to geo index using GEOADD (lon, lat, member)
+    const geoaddResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(["GEOADD", LOCATION_KEY, longitude, latitude, messageId])
+    });
+     if (!geoaddResponse.ok) {
+      const errorData = await geoaddResponse.json();
+      console.error(`RedisMessageService - Error executing GEOADD for ${messageId}:`, errorData);
+      // Attempt to clean up the hash if GEOADD fails
+      await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(["DEL", messageId]) });
+      throw new Error(`Failed to add message location: ${errorData.error}`);
+    }
+    const geoaddData = await geoaddResponse.json();
+     console.log(`RedisMessageService - GEOADD result for ${messageId}:`, geoaddData.result);
+
+    
+    // 3. Set an expiration time (e.g., 72 hours) using EXPIRE
+    const expiresInSeconds = 72 * 60 * 60;
+    const expireResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(["EXPIRE", messageId, expiresInSeconds])
+    });
+    if (!expireResponse.ok) {
+      const errorData = await expireResponse.json();
+      console.error(`RedisMessageService - Error executing EXPIRE for ${messageId}:`, errorData);
+      // Note: Data might partially exist if EXPIRE fails. Consider cleanup logic.
+      throw new Error(`Failed to set expiration for message: ${errorData.error}`);
+    }
+    const expireData = await expireResponse.json();
+    console.log(`RedisMessageService - EXPIRE result for ${messageId}:`, expireData.result);
+
+    
+    console.log(`RedisMessageService - Successfully added/updated message ${messageId} via REST API.`);
+    return messageId;
+
+  } catch (error) {
+    console.error(`RedisMessageService - Error adding/updating message ${messageId} via REST API:`, error);
+    // Ensure the error is re-thrown so the calling function knows about the failure
+    if (error instanceof Error) {
+       throw error;
+    } else {
+       throw new Error('An unknown error occurred while adding the message.');
     }
   }
+}
+
+// Get message details by ID
+export async function getMessageById(messageId: string): Promise<Message | null> {
+  console.log(`RedisMessageService - Getting message details for ID: ${messageId}`);
   
-  return removedCount;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    console.error(`RedisMessageService - Missing Redis credentials for getMessageById`);
+    return null;
+  }
+
+  const headers = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(["HGETALL", messageId])
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error(`RedisMessageService - Error executing HGETALL for ${messageId}:`, errorData);
+      return null;
+    }
+
+    const data = await response.json();
+    const hashData = data.result;
+
+    // HGETALL returns a flat array [key1, value1, key2, value2, ...]
+    if (!hashData || hashData.length === 0) {
+      console.log(`RedisMessageService - No data found for message ID: ${messageId}`);
+      return null;
+    }
+
+    // Convert the flat array into an object
+    const messageObj: { [key: string]: string } = {};
+    for (let i = 0; i < hashData.length; i += 2) {
+      messageObj[hashData[i]] = hashData[i + 1];
+    }
+
+    // Parse and structure the data into the Message type
+    if (!messageObj.id || !messageObj.lat || !messageObj.lon || !messageObj.timestamp || !messageObj.content) {
+        console.error(`RedisMessageService - Incomplete message data retrieved for ${messageId}:`, messageObj);
+        return null; // Essential fields missing
+    }
+
+    const message: Message = {
+      id: messageObj.id,
+      header: messageObj.header || '',
+      content: messageObj.content,
+      location: {
+        lat: parseFloat(messageObj.lat),
+        lng: parseFloat(messageObj.lon),
+      },
+      timestamp: new Date(parseInt(messageObj.timestamp, 10)).toISOString(),
+      burnRate: messageObj.burnRate ? parseInt(messageObj.burnRate, 10) : 0,
+      replies: messageObj.replies ? JSON.parse(messageObj.replies) : [],
+    };
+
+    console.log(`RedisMessageService - Successfully retrieved message details for ${messageId}`);
+    return message;
+
+  } catch (error) {
+    console.error(`RedisMessageService - Error getting message details for ${messageId}:`, error);
+    return null;
+  }
+}
+
+// Get color based on message properties (example)
+export function getMessageColor(message: Message): string {
+  const ageHours = (Date.now() - new Date(message.timestamp).getTime()) / (1000 * 60 * 60);
+  if (ageHours < 1) return '#ff6347'; 
+  if (ageHours < 6) return '#ffa500'; 
+  if (ageHours < 24) return '#ffd700'; 
+  return '#add8e6'; 
+}
+
+// Get opacity based on message properties (example)
+export function getMessageOpacity(message: Message): number {
+  const ageHours = (Date.now() - new Date(message.timestamp).getTime()) / (1000 * 60 * 60);
+  const maxAgeHours = 72; 
+  if (ageHours > maxAgeHours) return 0.3;
+  return Math.max(0.3, 1 - (ageHours / maxAgeHours));
 }

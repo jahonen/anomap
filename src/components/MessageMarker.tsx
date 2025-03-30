@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { Message, getMessageColor, getMessageOpacity } from '../services/messageService';
+import { Message } from '../utils/types';
+import { getMessageOpacity } from '../utils/mapUtils';
+
+// Temporary basic versions of helper functions (replace later if needed)
+const getMessageColor = (message: Message): string => '#3b82f6'; // Default blue
 
 interface MessageMarkerProps {
   message: Message;
@@ -17,6 +21,23 @@ export default function MessageMarker({ message, map, onClick }: MessageMarkerPr
   useEffect(() => {
     if (!map) return;
 
+    // Extract lat/lng, handling both array and object formats
+    let lat: number;
+    let lng: number;
+    if (Array.isArray(message.location)) {
+      lat = message.location[0];
+      lng = message.location[1];
+    } else {
+      lat = message.location.lat;
+      lng = message.location.lng;
+    }
+
+    // Validate coordinates
+    if (typeof lat !== 'number' || isNaN(lat) || typeof lng !== 'number' || isNaN(lng)) {
+        console.warn('MessageMarker - Invalid location for message:', message.id, message.location);
+        return; // Don't create marker if location is invalid
+    }
+
     console.log('MessageMarker - Creating/updating marker for message:', message.header);
 
     // Create marker if it doesn't exist
@@ -25,7 +46,7 @@ export default function MessageMarker({ message, map, onClick }: MessageMarkerPr
       const color = getMessageColor(message);
       const opacity = getMessageOpacity(message);
       
-      console.log(`MessageMarker - Creating new flag marker at [${message.location.lat}, ${message.location.lng}] with color ${color} and opacity ${opacity}`);
+      console.log(`MessageMarker - Creating new flag marker at [${lat}, ${lng}] with color ${color} and opacity ${opacity}`);
       
       const flagIcon = L.divIcon({
         className: 'message-flag-icon',
@@ -48,14 +69,14 @@ export default function MessageMarker({ message, map, onClick }: MessageMarkerPr
         offset: [15, -25]
       }).setContent(`
         <div class="message-popup-header">${message.header}</div>
-        <div class="message-popup-content">${message.message}</div>
+        <div class="message-popup-content">${message.content}</div>
         <div class="message-popup-footer">
           <span>${message.replyCount} ${message.replyCount === 1 ? 'reply' : 'replies'}</span>
         </div>
       `);
 
       // Create marker with the custom icon
-      const marker = L.marker([message.location.lat, message.location.lng], {
+      const marker = L.marker([lat, lng], {
         icon: flagIcon,
         riseOnHover: true,
         zIndexOffset: 1000 // Ensure message markers are above the user location marker
@@ -98,30 +119,32 @@ export default function MessageMarker({ message, map, onClick }: MessageMarkerPr
       });
       
       markerRef.current.setIcon(updatedIcon);
+      markerRef.current.setLatLng([lat, lng]); // Update position just in case
       
       // Update popup content
       if (popupRef.current) {
-        popupRef.current.setContent(`
+        const newPopupContent = `
           <div class="message-popup-header">${message.header}</div>
-          <div class="message-popup-content">${message.message}</div>
+          <div class="message-popup-content">${message.content}</div>
           <div class="message-popup-footer">
             <span>${message.replyCount} ${message.replyCount === 1 ? 'reply' : 'replies'}</span>
           </div>
-        `);
+        `;
+        popupRef.current.setContent(newPopupContent);
       }
     }
 
-    // Cleanup function
+    // Cleanup function to remove marker when component unmounts or message changes
     return () => {
-      if (markerRef.current) {
-        console.log(`MessageMarker - Removing marker for ${message.header}`);
-        markerRef.current.remove();
+      if (markerRef.current && map) {
+        console.log('MessageMarker - Removing marker for message:', message.header);
+        map.removeLayer(markerRef.current);
         markerRef.current = null;
         popupRef.current = null;
       }
     };
-  }, [map, message, onClick]);
+  }, [message, map, onClick]); // Re-run effect if message, map, or onClick changes
 
-  // This component doesn't render anything directly
+  // Component doesn't render anything itself, it manages the Leaflet marker
   return null;
 }

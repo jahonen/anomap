@@ -14,10 +14,12 @@ export interface Reply {
 
 export interface Message {
   id: string;
-  header?: string; // Optional header field for the message
-  content: string;
-  location: [number, number]; 
+  header: string; // Make header non-optional again
+  content: string; 
+  location: [number, number] | { lat: number; lng: number }; 
   timestamp: string;
   burnRate: number; 
   replies: Reply[];
+  expiresAt?: number;
+  replyCount?: number;
 }

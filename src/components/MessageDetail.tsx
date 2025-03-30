@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Message } from '../services/messageService';
+import { Message, Reply } from '../utils/types'; 
 import Button from './Button';
-import { useMessages, getMessageOpacity } from '../contexts/MessagesContext';
+import { useMessages } from '../contexts/MessagesContext';
+import { getMessageOpacity } from '../utils/mapUtils';
 import blueskyIcon from '../assets/images/bluesky.png';
 import redditIcon from '../assets/images/reddit.png';
 import googleMapsIcon from '../assets/images/google-maps.png';
@@ -23,7 +24,7 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
   const repliesContainerRef = useRef<HTMLDivElement>(null);
   
   // Get messages context
-  const { addReply, getHoursRemaining, getMessageById } = useMessages();
+  const { addReply, getMessageById } = useMessages();
   
   // Update the message when initialMessage changes
   useEffect(() => {
@@ -45,10 +46,17 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
   
   if (!message) return null;
   
-  const hoursRemaining = getHoursRemaining(message);
-  
-  // Format timestamp to readable date/time
-  const formatTimestamp = (timestamp: number) => {
+  // Calculate hours remaining directly (assuming 24h lifetime)
+  const now = Date.now();
+  // Convert timestamp to number properly, handling both string and number formats
+  const messageTimestamp = typeof message.timestamp === 'string' 
+    ? new Date(message.timestamp).getTime() 
+    : (typeof message.timestamp === 'number' ? message.timestamp : 0);
+  const expiryTime = messageTimestamp + (24 * 60 * 60 * 1000);
+  const hoursRemaining = Math.max(0, (expiryTime - now) / (1000 * 60 * 60));
+
+  // Format timestamp to readable date/time, handling both string and number formats
+  const formatTimestamp = (timestamp: string | number) => {
     const date = new Date(timestamp);
     return date.toLocaleString();
   };
@@ -68,6 +76,15 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
   // Check if replies exist and is an array
   const hasReplies = message.replies && Array.isArray(message.replies) && message.replies.length > 0;
   
+  // Helper function to safely extract lat/lng
+  const getLatLng = (location: [number, number] | { lat: number; lng: number; }) => {
+    const lat = Array.isArray(location) ? location[0] : location.lat;
+    const lng = Array.isArray(location) ? location[1] : location.lng;
+    return { lat, lng };
+  };
+
+  const { lat, lng } = getLatLng(message.location);
+
   // Handle reply submission
   const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,37 +103,59 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
     setError('');
     
     try {
-      // Add reply using Context - now async
+      // Create an optimistic reply object to immediately update the UI
+      const optimisticReply: Reply = {
+        id: `temp-${Date.now()}`,
+        content: replyText,
+        timestamp: new Date().toISOString(), // Use ISO string for consistency with API
+      };
+
+      // Create a copy of the current message with the optimistic reply added
+      const updatedMessageOptimistic = {
+        ...message,
+        replies: [...(message.replies || []), optimisticReply],
+        replyCount: (message.replies?.length || 0) + 1
+      };
+
+      // Update UI immediately with optimistic reply
+      console.log('MessageDetail - Optimistically adding reply:', optimisticReply);
+      setMessage(updatedMessageOptimistic);
+      
+      // Submit to API
       const success = await addReply(message.id, replyText);
       
       if (success) {
         setReplyText('');
         setSuccess('Reply added successfully');
         
-        // Get the updated message with the new reply
-        const fetchUpdatedMessage = async () => {
-          try {
-            const updatedMessage = await getMessageById(message.id);
-            if (updatedMessage) {
-              setMessage(updatedMessage);
-            }
-          } catch (error) {
-            console.error('Error fetching updated message:', error);
-          }
-        };
-        
-        fetchUpdatedMessage();
+        // Get the "real" updated message from context if available
+        const updatedMessageFromContext = getMessageById(message.id);
+        if (updatedMessageFromContext && updatedMessageFromContext.replies?.length > updatedMessageOptimistic.replies.length) {
+          // If context has more replies than our optimistic update, use that instead
+          console.log('MessageDetail - Updated with real data from context:', updatedMessageFromContext);
+          setMessage(updatedMessageFromContext);
+        }
         
         // Clear success message after a delay
         setTimeout(() => {
           setSuccess('');
         }, 3000);
       } else {
+        // If API call failed, revert the optimistic update
         setError('Failed to add reply. Please try again.');
+        // Revert to original message state
+        if (initialMessage) {
+          console.log('MessageDetail - Reverting optimistic update');
+          setMessage(initialMessage);
+        }
       }
     } catch (error) {
       console.error('Error adding reply:', error);
       setError('Failed to add reply. Please try again.');
+      // Revert to original message state
+      if (initialMessage) {
+        setMessage(initialMessage);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -142,7 +181,7 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
           <div className="share-buttons">
             <h3 className="share-header">Share</h3>
             <a 
-              href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap\n\nCheck out this location on Anonmap: https://anonmap.net/?lat=${message.location.lat}&lng=${message.location.lng}&zoom=18`)}`}
+              href={`https://bsky.app/intent/compose?text=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap\n\nCheck out this location on Anonmap: https://anonmap.net/?lat=${lat}&lng=${lng}&zoom=18`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="social-share-button bluesky-button"
@@ -153,7 +192,7 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
             </a>
             
             <a 
-              href={`https://www.reddit.com/submit?url=${encodeURIComponent(`https://anonmap.net/?lat=${message.location.lat}&lng=${message.location.lng}&zoom=18`)}&title=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap`)}`}
+              href={`https://www.reddit.com/submit?url=${encodeURIComponent(`https://anonmap.net/?lat=${lat}&lng=${lng}&zoom=18`)}&title=${encodeURIComponent(`"${message.header}" - Anonymous message from Anonmap`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="social-share-button reddit-button"
@@ -166,7 +205,7 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
           <div className="navigate-buttons">
             <h3 className="navigate-header">Navigate</h3>
             <a 
-              href={`https://www.google.com/maps/search/?api=1&query=${message.location.lat},${message.location.lng}`}
+              href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
               target="_blank"
               rel="noopener noreferrer"
               className="social-share-button google-maps-button"
@@ -177,7 +216,7 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
             </a>
             
             <a 
-              href={`https://maps.apple.com/?q=${message.location.lat},${message.location.lng}`}
+              href={`https://maps.apple.com/?q=${lat},${lng}`}
               target="_blank"
               rel="noopener noreferrer"
               className="social-share-button apple-maps-button"
@@ -191,8 +230,8 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
         
         <div className="message-detail-content">
           <div className="message-bubble original-message">
-            <p className="message-text">{message.message}</p>
-            <div className="message-timestamp">{formatTimestamp(message.timestamp)}</div>
+            <p className="message-text">{message.content}</p>
+            <div className="message-timestamp">{formatTimestamp(message.timestamp)}</div> 
             <div className="time-remaining">{formatRemainingTime(hoursRemaining)}</div>
           </div>
           <div className="message-meta">
@@ -210,8 +249,8 @@ export default function MessageDetail({ message: initialMessage, onClose }: Mess
                   key={reply.id} 
                   className={`message-bubble reply ${index % 2 === 0 ? 'reply-left' : 'reply-right'}`}
                 >
-                  <p className="message-text">{reply.text}</p>
-                  <div className="message-timestamp">{formatTimestamp(reply.timestamp)}</div>
+                  <p className="message-text">{reply.content}</p>
+                  <div className="message-timestamp">{formatTimestamp(reply.timestamp)}</div> 
                 </div>
               ))}
             </div>
